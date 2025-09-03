@@ -10,6 +10,8 @@ class BBoxConverter:
 
     @staticmethod
     def rel_xywh_to_xyxy(rel_xywh, img_width, img_height, rounded=False):
+        if img_width <= 0 or img_height <= 0:
+            raise ValueError("Image dimensions must be positive")
         xr, yr, wr, hr = rel_xywh
         x1 = xr * img_width
         y1 = yr * img_height

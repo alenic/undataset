@@ -102,6 +102,8 @@ class UNDataset(BaseModel):
     def bbox_convert(self, to_format: str):
         for idx in tqdm(self.sample.keys(), desc=f"Converting BBoxes to {to_format}"):
             self.sample[idx].bbox_convert(to_format, inplace=True)
+        
+        return self
 
     def get_label_counts(self):
         label_counts = defaultdict(int)
@@ -200,6 +202,9 @@ class UNDataset(BaseModel):
                 raise ValueError(f"{filename} is not present in images")
 
             image_name_idx = images_name.index(filename)
+            if image_name_idx == -1:
+                raise ValueError(f"{filename} is not present in images")
+
             image_path = images_name[image_name_idx] + images_ext[image_name_idx]
 
             image_glob_path = os.path.join(

@@ -33,6 +33,9 @@ class UNSample(BaseModel):
         label_id: Optional[int] = None,
         score: Optional[float] = None,
     ):
+        if len(coords) != 4:
+            raise ValueError("Bounding box coordinates must have exactly 4 values")
+
         self.bbox.append(
             UNBBox(coords=coords, format=format, label_id=label_id, score=score)
         )
@@ -41,13 +44,15 @@ class UNSample(BaseModel):
         path = os.path.join(rootdir, self.image_path)
         if not os.path.exists(path):
             raise ValueError(f"Image {path} does not exists")
-
-        with Image.open(path) as img:
-            w, h = img.size
-
-        self.image_w = w
-        self.image_h = h
-        return w, h
+        
+        try:
+            with Image.open(path) as img:
+                w, h = img.size
+            self.image_w = w
+            self.image_h = h
+            return w, h
+        except Exception as e:
+            raise ValueError(f"Failed to open image {path}: {str(e)}")
 
     def get_label_counts(self):
         label_counts = defaultdict(int)

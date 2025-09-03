@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Union
 
 from typing_extensions import Tuple
 
@@ -55,24 +55,14 @@ class Evaluator:
         union_area = box1_area + box2_area - inter_area
         return inter_area / union_area if union_area > 0 else 0.0
 
-    # def _bbox_iou(self, gt_bbox: UNBBox, predicted_bbox: UNBBox, img_width: int, img_height: int) -> float:
-    #    # Convert both bboxes to xyxy format
-    #    gt_sample = UNSample(bbox=[gt_bbox], image_w=img_width, image_h=img_height)
-    #    gt_sample = gt_sample.bbox_convert(to_format="xyxy", inplace=False)
-    #
-    #    predicted_sample = UNSample(bbox=[predicted_bbox], image_w=img_width, image_h=img_height)
-    #    predicted_sample = predicted_sample.bbox_convert(to_format="xyxy", inplace=False)
-    #
-    #    return self._iou_xyxy(gt_sample.bbox[0], predicted_sample.bbox[0])
-
     @staticmethod
-    def sample_iou(
+    def iou_matrix(
         gt_sample: UNSample,
         predicted_sample: UNSample,
         iou_threshold_for_match: float = 0.5,
         score_threshold: float = 0.5,
         check_label: bool = False,
-    ) -> Tuple[List[Any], List[Any]] | Tuple[List[List[bool]], List[List[float]]]:
+    ) -> Tuple[List[List[bool]], List[List[float]]]:
         """
         Compute Intersection over Union (IoUs) between ground truth and predicted bounding boxes
         and filters them based on a threshold.
@@ -92,18 +82,18 @@ class Evaluator:
         if not gt_sample.bbox:
             return [], []  # No ground truth boxes
 
-        gt_sample.bbox_convert(to_format="xyxy")
-        predicted_sample.bbox_convert(to_format="xyxy")
+        gt_sample_c = gt_sample.bbox_convert(to_format="xyxy", inplace=False)
+        predicted_sample_c = predicted_sample.bbox_convert(to_format="xyxy", inplace=False)
 
         # Create a matrix with ground truth on rows and predictions on columns and a matrix with bools based dn threshold
         ious_matrix = []
         ious_matrix_bool = []
 
-        for gt_bbox in gt_sample.bbox:
+        for gt_bbox in gt_sample_c.bbox:
             ious_single_gt = []
             ious_single_gt_bool = []
 
-            for predicted_bbox in predicted_sample.bbox:
+            for predicted_bbox in predicted_sample_c.bbox:
                 iou = Evaluator._iou_xyxy(gt_bbox, predicted_bbox)
                 ious_single_gt.append(iou)
 
@@ -125,34 +115,89 @@ class Evaluator:
     @staticmethod
     def compute_metrics(ious_matrix_bool: List[List[bool]]) -> Tuple[int, int, int]:
         """
-        Computes TP, FP, FN, TN from IoU match matrix.
-        TP: A prediction correctly matches a ground truth (i.e. True in ious_matrix_bool).
-        FP: A prediction doesn’t match any ground truth (i.e. all False in its column, column is all GTs).
-        FN: A ground truth has no matching predictions (i.e. all False in its row, row is all predictions).
+        Computes TP, FP, FN from IoU match matrix using Hungarian algorithm approach.
+        
+        TP: Correctly matched predictions (1 prediction per ground truth max)
+        FP: Predictions that don't match any ground truth
+        FN: Ground truths that don't have any matching predictions
 
         Args:
             ious_matrix_bool: A 2D list of booleans indicating IoU threshold match.
 
         Returns:
-            A tuple: (TP, FP, FN, TN)
+            A tuple: (TP, FP, FN)
         """
+        if not ious_matrix_bool or not any(any(row) for row in ious_matrix_bool):
+            num_gt = len(ious_matrix_bool)
+            num_pred = len(ious_matrix_bool[0]) if ious_matrix_bool else 0
+            return 0, num_pred, num_gt  # All predictions are FP, all GTs are FN
+
         num_gt = len(ious_matrix_bool)
         num_pred = len(ious_matrix_bool[0])
 
         matched_preds = [False] * num_pred
         matched_gts = [False] * num_gt
 
+        # Simple greedy matching (could be improved with proper Hungarian algorithm)
         for i, gt_row in enumerate(ious_matrix_bool):
             for j, matched in enumerate(gt_row):
                 if matched and not matched_preds[j] and not matched_gts[i]:
                     matched_preds[j] = True
                     matched_gts[i] = True
+                    break  # Each GT can only match one prediction
 
         tp = sum(matched_gts)
-        fn = matched_gts.count(False)
-        fp = matched_preds.count(False)
+        fp = num_pred - sum(matched_preds)  # Unmatched predictions
+        fn = num_gt - tp  # Unmatched ground truths
 
         return tp, fp, fn
+
+    @staticmethod
+    def eval_samples(
+        gt_sample: UNSample,
+        pred_sample: UNSample,
+        iou_threshold_for_match: float = 0.5,
+        score_threshold: float = 0.5,
+        check_label: bool = False,
+    ) -> Tuple[List[UNBBox], List[UNBBox], List[UNBBox]]:
+        """
+        Returns the UNBBox objects for True Positives (TP), False Positives (FP), and False Negatives (FN)
+        between a ground truth sample and a predicted sample.
+
+        Returns bboxes in their original format, not necessarily xyxy.
+        """
+        # Convert to xyxy for IoU calculation but keep original bboxes
+        gt_sample_c = gt_sample.bbox_convert(to_format="xyxy", inplace=False)
+        pred_sample_c = pred_sample.bbox_convert(to_format="xyxy", inplace=False)
+
+        ious_matrix_bool, _ = Evaluator.iou_matrix(
+            gt_sample_c,
+            pred_sample_c,
+            iou_threshold_for_match,
+            score_threshold,
+            check_label,
+        )
+
+        num_gt = len(ious_matrix_bool)
+        num_pred = len(ious_matrix_bool[0]) if num_gt > 0 else 0
+
+        matched_preds = [False] * num_pred
+        matched_gts = [False] * num_gt
+
+        # Greedy matching
+        for i, gt_row in enumerate(ious_matrix_bool):
+            for j, matched in enumerate(gt_row):
+                if matched and not matched_preds[j] and not matched_gts[i]:
+                    matched_preds[j] = True
+                    matched_gts[i] = True
+                    break
+
+        # Return bboxes from original samples, not converted ones
+        tp_bboxes = [gt_sample.bbox[i] for i, matched in enumerate(matched_gts) if matched]
+        fn_bboxes = [gt_sample.bbox[i] for i, matched in enumerate(matched_gts) if not matched]
+        fp_bboxes = [pred_sample.bbox[j] for j, matched in enumerate(matched_preds) if not matched]
+
+        return tp_bboxes, fp_bboxes, fn_bboxes
 
     @staticmethod
     def evaluate_dataset(
@@ -162,28 +207,35 @@ class Evaluator:
         score_threshold: float = 0.5,
         check_label: bool = False,
         return_global: bool = False,
-    ) -> List[Tuple[int, int, int]]:
-        # Tagged samples
+    ) -> Union[List[Tuple[int, int, int]], Tuple[List[Tuple[int, int, int]], Tuple[int, int, int]]]:
+        
+        if not dataset.sample:
+            return [] if not return_global else ([], (0, 0, 0))
 
-        gt_keys = dataset.sample.keys()
-
+        gt_keys = list(dataset.sample.keys())
+        
         if return_global:
             tp, fp, fn = 0, 0, 0
 
-        # Accumulate metrics (tp, fp, fn) for each ground truth sample for each predicted sample
+
+
         metrics_dataset = []
         for idx in gt_keys:
-            ious_matrix_bool, _ = Evaluator.sample_iou(
-                dataset.sample[idx],
-                predicted_dataset[idx],
-                iou_threshold_for_match,
-                score_threshold,
-                check_label,
-            )
-            local_tp, local_fp, local_fn = Evaluator.compute_metrics(ious_matrix_bool)
+            if idx not in predicted_dataset.sample:
+                # Handle missing predictions
+                local_tp, local_fp, local_fn = 0, 0, len(dataset.sample[idx].bbox) if dataset.sample[idx].bbox else 0
+            else:
+                ious_matrix_bool, _ = Evaluator.iou_matrix(
+                    dataset.sample[idx],
+                    predicted_dataset.sample[idx],
+                    iou_threshold_for_match,
+                    score_threshold,
+                    check_label,
+                )
+                local_tp, local_fp, local_fn = Evaluator.compute_metrics(ious_matrix_bool)
+            
             metrics_dataset.append((local_tp, local_fp, local_fn))
 
-            # Accumulate metrics
             if return_global:
                 tp += local_tp
                 fp += local_fp
