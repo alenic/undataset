@@ -113,6 +113,52 @@ class UNDataset(BaseModel):
                 label_counts[cidx] += count_value
         return label_counts
 
+    def get_stats(self):
+        stats = {
+            "num_samples": len(self.sample),
+            "num_bboxes": 0,
+            "num_bboxes_per_label": {},
+            "num_labels": set(),
+        }
+        image_widths = []
+        image_heights = []
+
+        for idx in tqdm(self.sample.keys(), desc=f"Computing dataset stats"):
+            stats["num_bboxes"] += len(self.sample[idx].bbox)
+            for bbox in self.sample[idx].bbox:
+                stats["num_bboxes_per_label"].setdefault(bbox.label_id, 0)
+                stats["num_bboxes_per_label"][bbox.label_id] += 1
+                stats["num_labels"].add(bbox.label_id)
+            if self.sample[idx].image_w is not None:
+                image_widths.append(self.sample[idx].image_w)
+            if self.sample[idx].image_h is not None:
+                image_heights.append(self.sample[idx].image_h)
+
+        stats["num_labels"] = len(stats["num_labels"])
+        if image_widths:
+            stats["min_image_width"] = min(image_widths)
+            stats["max_image_width"] = max(image_widths)
+            stats["avg_image_width"] = sum(image_widths) / len(
+                image_widths
+            )
+        else:
+            stats["min_image_width"] = None
+            stats["max_image_width"] = None
+            stats["avg_image_width"] = None
+
+        if image_heights:
+            stats["min_image_height"] = min(image_heights)
+            stats["max_image_height"] = max(image_heights)
+            stats["avg_image_height"] = sum(image_heights) / len(
+                image_heights
+            )
+        else:
+            stats["min_image_height"] = None
+            stats["max_image_height"] = None
+            stats["avg_image_height"] = None
+
+        return stats
+
     # =================== Import/Export =========================
     def export_to_json(self, json_file: str, indent: int = 2):
         with open(json_file, "w") as fp:
