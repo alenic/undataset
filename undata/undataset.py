@@ -1,6 +1,6 @@
 import copy
 import os
-import glob
+import hashlib
 import yaml
 from typing import List, Dict, Optional, Union
 from collections import defaultdict
@@ -73,9 +73,8 @@ class UNDataset(BaseModel):
         for idx in tqdm(self.sample.keys(), desc="Computing Image Width and Height"):
             self.sample[idx].compute_image_wh(self.rootdir)
 
-    def find_duplicate_images(self):
-        import hashlib
-
+    def find_duplicate_images(self) -> List[int]:
+        
         def compute_image_hash(image_path: str, hash_algo="md5") -> str:
             hash_func = hashlib.new(hash_algo)
             with open(image_path, "rb") as f:
@@ -215,12 +214,12 @@ class UNDataset(BaseModel):
                 with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
                     fp.write(yolo_str)
 
-    def load_from_yolo(self, classes_path: str, ann_path: str, images_path: str):
-        if not os.path.exists(ann_path):
-            raise ValueError(f"Annotation path: {ann_path} does not exists")
+    def load_from_yolo(self, classes_path: str, anns_root: str, images_root: str, images_lead: bool = True):
+        if not os.path.exists(anns_root):
+            raise ValueError(f"Annotation path: {anns_root} does not exists")
 
-        if not os.path.exists(images_path):
-            raise ValueError(f"Images path: {images_path} does not exists")
+        if not os.path.exists(images_root):
+            raise ValueError(f"Images path: {images_root} does not exists")
 
         if not os.path.exists(classes_path):
             raise ValueError(f"Classes path: {classes_path} does not exists")
@@ -232,46 +231,74 @@ class UNDataset(BaseModel):
         elif classes_path.endswith(".txt"):
             with open(classes_path, "r") as fp:
                 classes = {"names": [line.strip() for line in fp.readlines()]}
+        else:
+            raise ValueError("Invalid classes_path, you must provide .txt or .yaml")
+        
 
-        self.rootdir = images_path
+        # Set the rootdir
+        self.rootdir = images_root
+        # Set the labels map
         self.set_labels_map(classes["names"])
 
-        annotations_glob = glob.glob(os.path.join(ann_path, "*.txt"))
-        images = os.listdir(images_path)
-        images_name_ext = [os.path.splitext(p) for p in images]
-        images_name = [p[0] for p in images_name_ext]
-        images_ext = [p[1] for p in images_name_ext]
-        for ann in tqdm(annotations_glob, desc=f"Loading from yolo annotations"):
-            filename, _ = os.path.splitext(os.path.basename(ann))
+        # Get the filenames
+        images_list = os.listdir(images_root)
+        anns_list = os.listdir(anns_root)
 
-            if filename not in images_name:
-                raise ValueError(f"{filename} is not present in images")
+        image_names = dict([(os.path.splitext(i)[0], i) for i in images_list])
+        annotation_names = dict([(os.path.splitext(a)[0], a) for a in anns_list])
 
-            image_name_idx = images_name.index(filename)
-            if image_name_idx == -1:
-                raise ValueError(f"{filename} is not present in images")
+        if images_lead:
+            for (img_name, img_filename) in tqdm(image_names.items(), desc=f"Loading from yolo images"):
+                
+                # image_path is relative to rootdir
+                sample = UNSample(
+                    image_path=img_filename,
+                )
 
-            image_path = images_name[image_name_idx] + images_ext[image_name_idx]
+                # Check if exists a related annotation
+                annotation_global_path =  os.path.join(
+                    anns_root,
+                    img_name + ".txt",
+                )
 
-            image_glob_path = os.path.join(
-                images_path,
-                images_name[image_name_idx] + images_ext[image_name_idx],
-            )
-            # It's a double check
-            if not os.path.exists(image_glob_path):
-                raise ValueError(f"Image path {image_glob_path} does not exists")
+                if os.path.exists(annotation_global_path):
+                    with open(annotation_global_path, "r") as fp:
+                        yolo_lines = fp.readlines()
 
-            sample = UNSample(
-                image_path=image_path,
-            )
+                    sample.yolo_loads(yolo_lines)
+                else:
+                    # If annotations doesn't exist, it means that it a background image
+                    pass
+                sample.compute_image_wh(self.rootdir)
+                self.add_sample(sample)
+        else:
+            for (ann_name, ann_filename) in tqdm(annotation_names.items(), desc=f"Loading from yolo annotations"):
 
-            with open(ann, "r") as fp:
-                yolo_lines = fp.readlines()
+                # Check if the associated image exists
+                image_glob_path = os.path.join(
+                    images_root,
+                    image_names[ann_name],
+                )
+                # It's a double check
+                if not os.path.exists(image_glob_path):
+                    raise ValueError(f"Image path {image_glob_path} does not exists")
 
-            sample.yolo_loads(yolo_lines)
-            sample.compute_image_wh(self.rootdir)
+                sample = UNSample(
+                    image_path=image_names[ann_name],
+                )
 
-            self.add_sample(sample)
+                annotation_global_path =  os.path.join(
+                    anns_root,
+                    img_name + ".txt",
+                )
+
+                with open(annotation_global_path, "r") as fp:
+                    yolo_lines = fp.readlines()
+
+                sample.yolo_loads(yolo_lines)
+                sample.compute_image_wh(self.rootdir)
+
+                self.add_sample(sample)
 
         return self
 
