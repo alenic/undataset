@@ -54,7 +54,7 @@ class UNSample(BaseModel):
         except Exception as e:
             raise ValueError(f"Failed to open image {path}: {str(e)}")
 
-    def get_label_counts(self):
+    def get_labels_counts(self):
         label_counts = defaultdict(int)
         for bbox in self.bbox:
             label_counts[bbox.label_id] += 1

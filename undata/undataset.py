@@ -27,6 +27,14 @@ class UNDataset(BaseModel):
 
         return self.sample[idx]
 
+    def get_image_paths(self) -> List[str]:
+        image_paths = []
+
+        for k, s in self.sample.items():
+            image_paths.append(os.path.join(self.rootdir, s.image_path))
+        
+        return image_paths
+
     def set_labels_map(self, labels_map: Union[Dict[int, str], List[str]]):
         if isinstance(labels_map, list):
             self.labels_map = {k: labels_map[k] for k in range(len(labels_map))}
@@ -98,16 +106,22 @@ class UNDataset(BaseModel):
 
         return list(hashes.values())
 
-    def bbox_convert(self, to_format: str):
+    def bbox_convert(self, to_format: str, inplace: bool = True):
+        # Return a copy of the dataset
+        if not inplace:
+            new_dataset = copy.deepcopy(self)
+            new_dataset.bbox_convert(to_format=to_format, inplace=True)
+            return new_dataset
+
         for idx in tqdm(self.sample.keys(), desc=f"Converting BBoxes to {to_format}"):
-            self.sample[idx].bbox_convert(to_format, inplace=True)
+            self.sample[idx].bbox_convert(to_format, inplace=inplace)
         
         return self
 
-    def get_label_counts(self):
+    def get_labels_counts(self):
         label_counts = defaultdict(int)
         for idx in tqdm(self.sample.keys(), desc=f"Counting BBoxes labels"):
-            sample_label_counts = self.sample[idx].get_label_counts()
+            sample_label_counts = self.sample[idx].get_labels_counts()
             for cidx, count_value in sample_label_counts.items():
                 label_counts[cidx] += count_value
         return label_counts
@@ -117,46 +131,131 @@ class UNDataset(BaseModel):
             "num_samples": len(self.sample),
             "num_bboxes": 0,
             "num_bboxes_per_label": {},
-            "num_labels": set(),
+            "num_labels": 0,
         }
         image_widths = []
         image_heights = []
 
+        # Bounding box stats
+        bbox_widths = []
+        bbox_heights = []
+        bbox_areas = []
+
+        label_counts = self.get_labels_counts()
+        stats["num_bboxes_per_label"] = dict(label_counts)
+        stats["num_labels"] = len(label_counts)
+        stats["num_bboxes"] = sum(label_counts.values())
+
         for idx in tqdm(self.sample.keys(), desc=f"Computing dataset stats"):
-            stats["num_bboxes"] += len(self.sample[idx].bbox)
-            for bbox in self.sample[idx].bbox:
-                stats["num_bboxes_per_label"].setdefault(bbox.label_id, 0)
-                stats["num_bboxes_per_label"][bbox.label_id] += 1
-                stats["num_labels"].add(bbox.label_id)
-            if self.sample[idx].image_w is not None:
-                image_widths.append(self.sample[idx].image_w)
-            if self.sample[idx].image_h is not None:
-                image_heights.append(self.sample[idx].image_h)
+            sample = self.sample[idx]
+            if sample.image_w is not None:
+                image_widths.append(sample.image_w)
+            if sample.image_h is not None:
+                image_heights.append(sample.image_h)
+            # --- BBox stats ---
+            
+            if sample.bbox is not None:
+                sample_c = sample.bbox_convert("rel_xywh", rounded=True, inplace=False)
+                for bbox in sample_c.bbox:
+                    # Example: bbox = (x_min, y_min, x_max, y_max)
+                    _, _, w, h = bbox.coords
+                    bbox_widths.append(w)
+                    bbox_heights.append(h)
+                    bbox_areas.append(w * h)
 
-        stats["num_labels"] = len(stats["num_labels"])
-        if image_widths:
-            stats["min_image_width"] = min(image_widths)
-            stats["max_image_width"] = max(image_widths)
-            stats["avg_image_width"] = sum(image_widths) / len(
-                image_widths
-            )
-        else:
-            stats["min_image_width"] = None
-            stats["max_image_width"] = None
-            stats["avg_image_width"] = None
+        stats["min_image_width"] = min(image_widths) if image_widths else None
+        stats["max_image_width"] = max(image_widths) if image_widths else None
+        stats["avg_image_width"] = sum(image_widths) / len(image_widths) if image_widths else None
 
-        if image_heights:
-            stats["min_image_height"] = min(image_heights)
-            stats["max_image_height"] = max(image_heights)
-            stats["avg_image_height"] = sum(image_heights) / len(
-                image_heights
-            )
-        else:
-            stats["min_image_height"] = None
-            stats["max_image_height"] = None
-            stats["avg_image_height"] = None
+        stats["min_image_height"] = min(image_heights) if image_heights else None
+        stats["max_image_height"] = max(image_heights) if image_heights else None
+        stats["avg_image_height"] = sum(image_heights) / len(image_heights) if image_heights else None
+
+        # Bounding box stats
+        stats["min_bbox_width"] = min(bbox_widths) if bbox_widths else None
+        stats["max_bbox_width"] = max(bbox_widths) if bbox_widths else None
+        stats["avg_bbox_width"] = sum(bbox_widths) / len(bbox_widths) if bbox_widths else None
+
+        stats["min_bbox_height"] = min(bbox_heights) if bbox_heights else None
+        stats["max_bbox_height"] = max(bbox_heights) if bbox_heights else None
+        stats["avg_bbox_height"] = sum(bbox_heights) / len(bbox_heights) if bbox_heights else None
+
+        stats["min_bbox_area"] = min(bbox_areas) if bbox_areas else None
+        stats["max_bbox_area"] = max(bbox_areas) if bbox_areas else None
+        stats["avg_bbox_area"] = sum(bbox_areas) / len(bbox_areas) if bbox_areas else None
 
         return stats
+
+    # =================== Filters ===============================
+    def filter_image_size(self, min_width: int = None, max_width: int = None, min_height: int = None, max_height: int = None):
+        """
+        Returns a new UNDataset containing only samples where
+        min_width <= image_w <= max_width and min_height <= image_h <= max_height.
+        """
+        filtered = UNDataset(
+            rootdir=self.rootdir,
+            labels_map=copy.deepcopy(self.labels_map),
+            tags_map=copy.deepcopy(self.tags_map)
+        )
+        for idx, sample in self.sample.items():
+            w = getattr(sample, "image_w", None)
+            h = getattr(sample, "image_h", None)
+            if w is None or h is None:
+                continue
+            if min_width is not None and w < min_width:
+                continue
+            if max_width is not None and w > max_width:
+                continue
+            if min_height is not None and h < min_height:
+                continue
+            if max_height is not None and h > max_height:
+                continue
+            filtered.add_sample(copy.deepcopy(sample))
+        return filtered
+    
+    def filter_bbox_size(
+        self,
+        min_width: float = None,
+        max_width: float = None,
+        min_height: float = None,
+        max_height: float = None,
+    ):
+        """
+        Returns a new UNDataset where each sample contains only bounding boxes
+        with min_width <= bbox_width <= max_width and min_height <= bbox_height <= max_height.
+        Samples with no remaining bboxes are excluded.
+        """
+        filtered = UNDataset(
+            rootdir=self.rootdir,
+            labels_map=copy.deepcopy(self.labels_map),
+            tags_map=copy.deepcopy(self.tags_map)
+        )
+        for idx, sample in self.sample.items():
+            # Deepcopy to avoid modifying the original sample
+            sample_copy = copy.deepcopy(sample)
+            sample_copy.bbox_convert(to_format="rel_xywh")
+            if sample_copy.bbox is not None:
+                filtered_bboxes = []
+                for bbox in sample_copy.bbox:
+                    # Assume bbox.coords = (x, y, w, h) or similar
+                    _, _, w, h = bbox.coords
+                    if min_width is not None and w < min_width:
+                        continue
+                    if max_width is not None and w > max_width:
+                        continue
+                    if min_height is not None and h < min_height:
+                        continue
+                    if max_height is not None and h > max_height:
+                        continue
+                    filtered_bboxes.append(bbox)
+                if filtered_bboxes:
+                    sample_copy.bbox = filtered_bboxes
+                    filtered.add_sample(sample_copy)
+            else:
+                # If no bbox, skip sample
+                continue
+        return filtered
+    
 
     # =================== Import/Export =========================
     def export_to_json(self, json_file: str, indent: int = 2):
