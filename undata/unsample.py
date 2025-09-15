@@ -14,7 +14,7 @@ from undata.unbbox import UNBBox
 
 
 class UNSample(BaseModel):
-    image_path: str = None  # Relative path
+    image_path: str  # Relative path
     image_w: Optional[int] = None  # Image width
     image_h: Optional[int] = None  # Image height
     bbox: Optional[List[UNBBox]] = None  # BBox
@@ -23,7 +23,7 @@ class UNSample(BaseModel):
     def as_json(self) -> str:
         return self.model_dump_json(indent=2)
 
-    def from_json(self, json_str: str, strict: bool = None):
+    def from_json(self, json_str: str, strict: Optional[bool] = None):
         self.model_validate_json(json_str, strict=strict)
 
     def add_bbox(
@@ -36,6 +36,9 @@ class UNSample(BaseModel):
         if len(coords) != 4:
             raise ValueError("Bounding box coordinates must have exactly 4 values")
 
+        if self.bbox is None:
+            self.bbox = []
+
         self.bbox.append(
             UNBBox(coords=coords, format=format, label_id=label_id, score=score)
         )
@@ -44,7 +47,7 @@ class UNSample(BaseModel):
         path = os.path.join(rootdir, self.image_path)
         if not os.path.exists(path):
             raise ValueError(f"Image {path} does not exists")
-        
+
         try:
             with Image.open(path) as img:
                 w, h = img.size
@@ -56,8 +59,9 @@ class UNSample(BaseModel):
 
     def get_labels_counts(self):
         label_counts = defaultdict(int)
-        for bbox in self.bbox:
-            label_counts[bbox.label_id] += 1
+        if self.bbox is not None:
+            for bbox in self.bbox:
+                label_counts[bbox.label_id] += 1
 
         return label_counts
 
@@ -96,11 +100,13 @@ class UNSample(BaseModel):
                 )
         return pd.DataFrame(data)
 
-    def from_dataframe(self, df: pd.DataFrame):
+    @staticmethod
+    def from_dataframe(df: pd.DataFrame) -> "UNSample":
         if df.empty:
             raise ValueError("df is empty")
 
-        image_path = df.iloc[0]["image_path"]
+        sample = UNSample(image_path=df.iloc[0]["image_path"])
+
         image_w = df.iloc[0]["image_w"]
         image_h = df.iloc[0]["image_h"]
         tag_id = df.iloc[0]["tag_id"]
@@ -108,8 +114,8 @@ class UNSample(BaseModel):
 
         for row in df.itertuples(index=False):
             coords = [row.bbox_0, row.bbox_1, row.bbox_2, row.bbox_3]
-            label_id = row.label_id
-            format = row.format
+            label_id = int(row.label_id)
+            format = str(row.format)
             if any(pd.isna(v) for v in coords + [label_id]):
                 coords = None
                 label_id = None
@@ -122,17 +128,16 @@ class UNSample(BaseModel):
                 )
                 bboxes.append(bbox)
 
-        self.image_path = image_path
-        self.image_w = image_w
-        self.image_h = image_h
+        sample.image_w = image_w
+        sample.image_h = image_h
         if len(bboxes) == 0:
-            self.bbox = None
+            sample.bbox = None
         else:
-            self.bbox = bboxes
+            sample.bbox = bboxes
 
-        self.tag_id = tag_id
+        sample.tag_id = tag_id
 
-        return self
+        return sample
 
     def bbox_convert(
         self,

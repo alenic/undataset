@@ -32,7 +32,7 @@ class UNDataset(BaseModel):
 
         for k, s in self.sample.items():
             image_paths.append(os.path.join(self.rootdir, s.image_path))
-        
+
         return image_paths
 
     def set_labels_map(self, labels_map: Union[Dict[int, str], List[str]]):
@@ -51,29 +51,28 @@ class UNDataset(BaseModel):
         self.rootdir = rootdir
 
     # =================== Utility ===============================
-    def remap_labels(
-        self, remap_dict: Dict[int, Union[int, None]], new_labels_map: Dict[int, str]
-    ):
-        # Assert that everything is coherent
-        for key in remap_dict:
-            assert key in self.labels_map.keys()
+    def remap_labels(self, remap_dict: Dict[int, int], new_labels_map: Dict[int, str]):
+        if self.labels_map is not None and remap_dict is not None:
+            # Assert that everything is coherent
+            for key in remap_dict:
+                assert key in self.labels_map.keys()
 
-        for value in remap_dict.values():
-            if value is not None:
-                assert value in self.labels_map.keys()
+            for value in remap_dict.values():
+                if value is not None:
+                    assert value in self.labels_map.keys()
 
-        for key, value in remap_dict.items():
-            if value is None:
-                print(f"Remapping {key}:{self.labels_map[key]} -> {value}")
-            else:
-                print(
-                    f"Remapping {key}:{self.labels_map[key]} -> {value}:{new_labels_map[value]}"
-                )
+            for key, value in remap_dict.items():
+                if value is None:
+                    print(f"Remapping {key}:{self.labels_map[key]} -> {value}")
+                else:
+                    print(
+                        f"Remapping {key}:{self.labels_map[key]} -> {value}:{new_labels_map[value]}"
+                    )
 
-        for idx in tqdm(self.sample.keys(), desc="Remapping Labels"):
-            self.sample[idx].remap_label_ids(remap_dict)
+            for idx in tqdm(self.sample.keys(), desc="Remapping Labels"):
+                self.sample[idx].remap_label_ids(remap_dict)
 
-        self.set_labels_map(new_labels_map)
+            self.set_labels_map(new_labels_map)
 
         return self
 
@@ -82,7 +81,7 @@ class UNDataset(BaseModel):
             self.sample[idx].compute_image_wh(self.rootdir)
 
     def find_duplicate_images(self) -> List[int]:
-        
+
         def compute_image_hash(image_path: str, hash_algo="md5") -> str:
             hash_func = hashlib.new(hash_algo)
             with open(image_path, "rb") as f:
@@ -115,7 +114,7 @@ class UNDataset(BaseModel):
 
         for idx in tqdm(self.sample.keys(), desc=f"Converting BBoxes to {to_format}"):
             self.sample[idx].bbox_convert(to_format, inplace=inplace)
-        
+
         return self
 
     def get_labels_counts(self):
@@ -153,7 +152,7 @@ class UNDataset(BaseModel):
             if sample.image_h is not None:
                 image_heights.append(sample.image_h)
             # --- BBox stats ---
-            
+
             if sample.bbox is not None:
                 sample_c = sample.bbox_convert("rel_xywh", rounded=True, inplace=False)
                 for bbox in sample_c.bbox:
@@ -165,29 +164,45 @@ class UNDataset(BaseModel):
 
         stats["min_image_width"] = min(image_widths) if image_widths else None
         stats["max_image_width"] = max(image_widths) if image_widths else None
-        stats["avg_image_width"] = sum(image_widths) / len(image_widths) if image_widths else None
+        stats["avg_image_width"] = (
+            sum(image_widths) / len(image_widths) if image_widths else None
+        )
 
         stats["min_image_height"] = min(image_heights) if image_heights else None
         stats["max_image_height"] = max(image_heights) if image_heights else None
-        stats["avg_image_height"] = sum(image_heights) / len(image_heights) if image_heights else None
+        stats["avg_image_height"] = (
+            sum(image_heights) / len(image_heights) if image_heights else None
+        )
 
         # Bounding box stats
         stats["min_bbox_width"] = min(bbox_widths) if bbox_widths else None
         stats["max_bbox_width"] = max(bbox_widths) if bbox_widths else None
-        stats["avg_bbox_width"] = sum(bbox_widths) / len(bbox_widths) if bbox_widths else None
+        stats["avg_bbox_width"] = (
+            sum(bbox_widths) / len(bbox_widths) if bbox_widths else None
+        )
 
         stats["min_bbox_height"] = min(bbox_heights) if bbox_heights else None
         stats["max_bbox_height"] = max(bbox_heights) if bbox_heights else None
-        stats["avg_bbox_height"] = sum(bbox_heights) / len(bbox_heights) if bbox_heights else None
+        stats["avg_bbox_height"] = (
+            sum(bbox_heights) / len(bbox_heights) if bbox_heights else None
+        )
 
         stats["min_bbox_area"] = min(bbox_areas) if bbox_areas else None
         stats["max_bbox_area"] = max(bbox_areas) if bbox_areas else None
-        stats["avg_bbox_area"] = sum(bbox_areas) / len(bbox_areas) if bbox_areas else None
+        stats["avg_bbox_area"] = (
+            sum(bbox_areas) / len(bbox_areas) if bbox_areas else None
+        )
 
         return stats
 
     # =================== Filters ===============================
-    def filter_image_size(self, min_width: int = None, max_width: int = None, min_height: int = None, max_height: int = None):
+    def filter_image_size(
+        self,
+        min_width: Optional[int] = None,
+        max_width: Optional[int] = None,
+        min_height: Optional[int] = None,
+        max_height: Optional[int] = None,
+    ):
         """
         Returns a new UNDataset containing only samples where
         min_width <= image_w <= max_width and min_height <= image_h <= max_height.
@@ -195,7 +210,7 @@ class UNDataset(BaseModel):
         filtered = UNDataset(
             rootdir=self.rootdir,
             labels_map=copy.deepcopy(self.labels_map),
-            tags_map=copy.deepcopy(self.tags_map)
+            tags_map=copy.deepcopy(self.tags_map),
         )
         for idx, sample in self.sample.items():
             w = getattr(sample, "image_w", None)
@@ -212,13 +227,13 @@ class UNDataset(BaseModel):
                 continue
             filtered.add_sample(copy.deepcopy(sample))
         return filtered
-    
+
     def filter_bbox_size(
         self,
-        min_width: float = None,
-        max_width: float = None,
-        min_height: float = None,
-        max_height: float = None,
+        min_width: Optional[float] = None,
+        max_width: Optional[float] = None,
+        min_height: Optional[float] = None,
+        max_height: Optional[float] = None,
     ):
         """
         Returns a new UNDataset where each sample contains only bounding boxes
@@ -228,7 +243,7 @@ class UNDataset(BaseModel):
         filtered = UNDataset(
             rootdir=self.rootdir,
             labels_map=copy.deepcopy(self.labels_map),
-            tags_map=copy.deepcopy(self.tags_map)
+            tags_map=copy.deepcopy(self.tags_map),
         )
         for idx, sample in self.sample.items():
             # Deepcopy to avoid modifying the original sample
@@ -255,7 +270,6 @@ class UNDataset(BaseModel):
                 # If no bbox, skip sample
                 continue
         return filtered
-    
 
     # =================== Import/Export =========================
     def export_to_json(self, json_file: str, indent: int = 2):
@@ -285,8 +299,7 @@ class UNDataset(BaseModel):
             df.groupby("index"),
             desc="Loading from Dataframe",
         ):
-            sample = UNSample()
-            sample.from_dataframe(group)
+            sample = UNSample.from_dataframe(group)
             self.sample[idx] = sample
 
         return self
@@ -313,7 +326,13 @@ class UNDataset(BaseModel):
                 with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
                     fp.write(yolo_str)
 
-    def load_from_yolo(self, classes_path: str, anns_root: str, images_root: str, images_lead: bool = True):
+    def load_from_yolo(
+        self,
+        classes_path: str,
+        anns_root: str,
+        images_root: str,
+        images_lead: bool = True,
+    ):
         if not os.path.exists(anns_root):
             raise ValueError(f"Annotation path: {anns_root} does not exists")
 
@@ -332,7 +351,6 @@ class UNDataset(BaseModel):
                 classes = {"names": [line.strip() for line in fp.readlines()]}
         else:
             raise ValueError("Invalid classes_path, you must provide .txt or .yaml")
-        
 
         # Set the rootdir
         self.rootdir = images_root
@@ -347,15 +365,17 @@ class UNDataset(BaseModel):
         annotation_names = dict([(os.path.splitext(a)[0], a) for a in anns_list])
 
         if images_lead:
-            for (img_name, img_filename) in tqdm(image_names.items(), desc=f"Loading from yolo images"):
-                
+            for img_name, img_filename in tqdm(
+                image_names.items(), desc=f"Loading from yolo images"
+            ):
+
                 # image_path is relative to rootdir
                 sample = UNSample(
                     image_path=img_filename,
                 )
 
                 # Check if exists a related annotation
-                annotation_global_path =  os.path.join(
+                annotation_global_path = os.path.join(
                     anns_root,
                     img_name + ".txt",
                 )
@@ -371,7 +391,9 @@ class UNDataset(BaseModel):
                 sample.compute_image_wh(self.rootdir)
                 self.add_sample(sample)
         else:
-            for (ann_name, ann_filename) in tqdm(annotation_names.items(), desc=f"Loading from yolo annotations"):
+            for ann_name, ann_filename in tqdm(
+                annotation_names.items(), desc=f"Loading from yolo annotations"
+            ):
 
                 # Check if the associated image exists
                 image_glob_path = os.path.join(
@@ -386,9 +408,9 @@ class UNDataset(BaseModel):
                     image_path=image_names[ann_name],
                 )
 
-                annotation_global_path =  os.path.join(
+                annotation_global_path = os.path.join(
                     anns_root,
-                    img_name + ".txt",
+                    ann_name + ".txt",
                 )
 
                 with open(annotation_global_path, "r") as fp:
