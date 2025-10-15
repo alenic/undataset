@@ -19,13 +19,32 @@ class UNDataset(BaseModel):
     tags_map: Optional[Dict[int, str]] = None
 
     def add_sample(self, sample: UNSample):
-        self.sample[len(self.sample)] = sample
+        new_id = len(self.sample)
+        while new_id in self.sample:
+            new_id += 1
 
-    def get_sample(self, idx: int) -> UNSample:
+        self.sample[new_id] = sample
+        return self
+
+    def reset_index(self, sort_by_image_path: bool = True):
+        if sort_by_image_path:
+            sorted_sample = {
+                k: v
+                for k, v in sorted(self.sample.items(), key=lambda item: item[1].image_path)
+            }
+            self.sample = sorted_sample
+        else:
+            self.sample = {i: v for i, v in enumerate(self.sample.values())}
+        
+        return self
+
+
+    def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
             raise IndexError()
-
-        return self.sample[idx]
+        
+        s = self.sample[idx]
+        return s.model_copy(deep=True) if not inplace else s
 
     def get_image_paths(self) -> List[str]:
         image_paths = []
