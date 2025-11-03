@@ -21,7 +21,7 @@ sample = ud.UNSample(
         ),
     ],
 )
-dataset.add_sample(sample)
+dataset.append(sample)
 
 
 sample = ud.UNSample(
@@ -34,13 +34,13 @@ sample = ud.UNSample(
         ),
     ],
 )
-dataset.add_sample(sample)
+dataset.append(sample)
 
 
 sample = ud.UNSample(
     image_path="VisDrone2019-DET-test-dev/images/0000006_07596_d_0000020.jpg", bbox=None
 )
-dataset.add_sample(sample)
+dataset.append(sample)
 
 
 # print(dataset)
@@ -48,6 +48,7 @@ dataset.add_sample(sample)
 dataset.compute_image_wh()
 df = dataset.as_dataframe()
 print(df)
+
 
 # dataset.bbox_convert("yolo")
 # df = dataset.as_dataframe()

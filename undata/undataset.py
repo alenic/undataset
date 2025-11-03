@@ -6,27 +6,36 @@ from typing import List, Dict, Optional, Union
 from collections import defaultdict
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, PrivateAttr, Field
 from tqdm import tqdm
 
 from undata.unsample import UNSample
+from undata.untypes import BBoxFormatType
 
 
 class UNDataset(BaseModel):
-    sample: Dict[int, UNSample] = Field(default_factory=dict)
     rootdir: str = "."
     labels_map: Optional[Dict[int, str]] = None
     tags_map: Optional[Dict[int, str]] = None
 
-    def add_sample(self, sample: UNSample):
+    sample: Dict[int, UNSample] = Field(default_factory=dict)
+    _path_to_id_map: Dict[str, int] = PrivateAttr(default_factory=dict)  # initial value
+
+    def append(self, sample: UNSample) -> "UNDataset":
         new_id = len(self.sample)
         while new_id in self.sample:
             new_id += 1
 
         self.sample[new_id] = sample
+        # Keep track of the id, given an image path
+        self._path_to_id_map[sample.image_path] = new_id
         return self
 
-    def reset_index(self, sort_by_image_path: bool = True):
+    def get_paths_to_ids(self):
+        for idx, sample in self.sample.items():
+            self._path_to_id_map[sample.image_path] = idx
+
+    def reset_index(self, sort_by_image_path: bool = True)-> "UNDataset":
         if sort_by_image_path:
             sorted_sample = {
                 k: v
@@ -95,6 +104,19 @@ class UNDataset(BaseModel):
 
         return self
 
+    def filter_bbox_labels(self, keep_ids: List, inplace=False):
+        if not inplace:
+            dataset_res = self.model_copy(deep=True)
+        for idx in tqdm(self.sample.keys(), desc="Filtering BBoxes"):
+            if inplace:
+                self.sample[idx].filter_bbox_labels(keep_ids=keep_ids, inplace=True)
+            else:
+                dataset_res.get_sample(idx).filter_bbox_labels(keep_ids=keep_ids, inplace=True)
+        if not inplace:
+            return dataset_res
+
+        return self
+
     def compute_image_wh(self):
         for idx in tqdm(self.sample.keys(), desc="Computing Image Width and Height"):
             self.sample[idx].compute_image_wh(self.rootdir)
@@ -124,7 +146,7 @@ class UNDataset(BaseModel):
 
         return list(hashes.values())
 
-    def bbox_convert(self, to_format: str, inplace: bool = True):
+    def bbox_convert(self, to_format: BBoxFormatType, inplace: bool = True):
         # Return a copy of the dataset
         if not inplace:
             new_dataset = copy.deepcopy(self)
@@ -160,7 +182,11 @@ class UNDataset(BaseModel):
         bbox_areas = []
 
         label_counts = self.get_labels_counts()
-        stats["num_bboxes_per_label"] = dict(label_counts)
+        label_counts = dict(label_counts)
+        sorted_dict = dict(sorted(label_counts.items()))
+        stats["num_bboxes_per_label_id"] = sorted_dict
+        if self.labels_map:
+            stats["num_bboxes_per_label_name"] = {self.labels_map[k]: v for k,v in sorted_dict.items()}
         stats["num_labels"] = len(label_counts)
         stats["num_bboxes"] = sum(label_counts.values())
 
@@ -244,7 +270,7 @@ class UNDataset(BaseModel):
                 continue
             if max_height is not None and h > max_height:
                 continue
-            filtered.add_sample(copy.deepcopy(sample))
+            filtered.append(copy.deepcopy(sample))
         return filtered
 
     def filter_bbox_size(
@@ -284,7 +310,7 @@ class UNDataset(BaseModel):
                     filtered_bboxes.append(bbox)
                 if filtered_bboxes:
                     sample_copy.bbox = filtered_bboxes
-                    filtered.add_sample(sample_copy)
+                    filtered.append(sample_copy)
             else:
                 # If no bbox, skip sample
                 continue
@@ -314,12 +340,12 @@ class UNDataset(BaseModel):
         return df.reset_index(drop=True)
 
     def from_dataframe(self, df):
+        grouped_df = df.groupby("index")
         for idx, group in tqdm(
-            df.groupby("index"),
+            grouped_df,
             desc="Loading from Dataframe",
         ):
-            sample = UNSample.from_dataframe(group)
-            self.sample[idx] = sample
+            self.sample[idx] =  UNSample.from_dataframe(group)
 
         return self
 
@@ -408,7 +434,7 @@ class UNDataset(BaseModel):
                     # If annotations doesn't exist, it means that it a background image
                     pass
                 sample.compute_image_wh(self.rootdir)
-                self.add_sample(sample)
+                self.append(sample)
         else:
             for ann_name, ann_filename in tqdm(
                 annotation_names.items(), desc=f"Loading from yolo annotations"
@@ -438,7 +464,7 @@ class UNDataset(BaseModel):
                 sample.yolo_loads(yolo_lines)
                 sample.compute_image_wh(self.rootdir)
 
-                self.add_sample(sample)
+                self.append(sample)
 
         return self
 

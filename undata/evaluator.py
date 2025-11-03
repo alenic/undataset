@@ -265,7 +265,7 @@ if __name__ == "__main__":
 
         # Create dataset and add the ground truth sample
         dataset = UNDataset()
-        dataset.add_sample(gt_sample)
+        dataset.append(gt_sample)
 
         # Run evaluation
         results = Evaluator.evaluate_dataset(
