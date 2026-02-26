@@ -36,23 +36,24 @@ class UNDataset(BaseModel):
         for idx, sample in self.sample.items():
             self._path_to_id_map[sample.image_path] = idx
 
-    def reset_index(self, sort_by_image_path: bool = True)-> "UNDataset":
+    def reset_index(self, sort_by_image_path: bool = True) -> "UNDataset":
         if sort_by_image_path:
             sorted_sample = {
                 k: v
-                for k, v in sorted(self.sample.items(), key=lambda item: item[1].image_path)
+                for k, v in sorted(
+                    self.sample.items(), key=lambda item: item[1].image_path
+                )
             }
             self.sample = sorted_sample
         else:
             self.sample = {i: v for i, v in enumerate(self.sample.values())}
-        
-        return self
 
+        return self
 
     def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
             raise IndexError()
-        
+
         s = self.sample[idx]
         return s.model_copy(deep=True) if not inplace else s
 
@@ -112,7 +113,10 @@ class UNDataset(BaseModel):
             if inplace:
                 self.sample[idx].filter_bbox_labels(keep_ids=keep_ids, inplace=True)
             else:
-                dataset_res.get_sample(idx).filter_bbox_labels(keep_ids=keep_ids, inplace=True)
+
+                dataset_res.get_sample(idx, inplace=True).filter_bbox_labels(
+                    keep_ids=keep_ids, inplace=True
+                )
         if not inplace:
             return dataset_res
 
@@ -187,7 +191,9 @@ class UNDataset(BaseModel):
         sorted_dict = dict(sorted(label_counts.items()))
         stats["num_bboxes_per_label_id"] = sorted_dict
         if self.labels_map:
-            stats["num_bboxes_per_label_name"] = {self.labels_map[k]: v for k,v in sorted_dict.items()}
+            stats["num_bboxes_per_label_name"] = {
+                self.labels_map[k]: v for k, v in sorted_dict.items()
+            }
         stats["num_labels"] = len(label_counts)
         stats["num_bboxes"] = sum(label_counts.values())
 
@@ -346,31 +352,16 @@ class UNDataset(BaseModel):
             grouped_df,
             desc="Loading from Dataframe",
         ):
-            self.sample[idx] =  UNSample.from_dataframe(group)
+            self.sample[idx] = UNSample.from_dataframe(group)
 
         return self
 
     def export_to_yolo(self, ann_path: str, exist_ok: bool = True):
-        export = False
-        if os.path.exists(ann_path):
-            accept = input(
-                f"{ann_path} already exists, do you want to conitnue? (y/n): "
-            )
-            if (accept.lower().strip() == "y") | (accept.lower().strip() == "yes"):
-                export = True
-            else:
-                export = False
-        else:
-            os.makedirs(ann_path, exist_ok=exist_ok)
-            export = True
-
-        if export:
-            for idx in tqdm(self.sample.keys(), desc=f"Exporting to yolo annotations"):
-                yolo_str = self.sample[idx].yolo_dumps()
-                image_name = os.path.basename(self.sample[idx].image_path)
-                image_name, _ = os.path.splitext(image_name)
-                with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
-                    fp.write(yolo_str)
+        return YOLOConverter.write(
+            self,
+            ann_path,
+            exist_ok,
+        )
 
     def load_from_yolo(
         self,

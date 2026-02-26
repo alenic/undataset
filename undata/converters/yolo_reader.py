@@ -1,18 +1,23 @@
 import os
 import yaml
 from tqdm import tqdm
+from typing import TYPE_CHECKING
 
-from undata import UNDataset, UNSample
 from undata.converters.base import UNDatasetReader
+
+if TYPE_CHECKING:
+    from undata.undataset import UNDataset
+
 
 class YOLOReader(UNDatasetReader):
 
-    def read(self,
+    def read(
+        self,
         classes_path: str,
         anns_root: str,
         images_root: str,
-        images_lead: bool = True
-        ):
+        images_lead: bool = True,
+    ):
         if not os.path.exists(anns_root):
             raise ValueError(f"Annotation path: {anns_root} does not exists")
 
@@ -32,10 +37,11 @@ class YOLOReader(UNDatasetReader):
         else:
             raise ValueError("Invalid classes_path, you must provide .txt or .yaml")
 
-        undataset = UNDataset(
-            rootdir=images_root,
-            labels_map=classes["names"]
-        )
+        from undata.undataset import UNDataset
+        from undata.unsample import UNSample
+
+        labels_map = {idx: name for idx, name in enumerate(classes["names"])}
+        undataset = UNDataset(rootdir=images_root, labels_map=labels_map)
         # Get the filenames
         images_list = os.listdir(images_root)
         anns_list = os.listdir(anns_root)
