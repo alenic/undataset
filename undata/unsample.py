@@ -245,34 +245,6 @@ class UNSample(BaseModel):
         self.bbox = keep if keep else None
         return self
 
-    def yolo_loads(self, yolo_lines: List[str]):
-        if self.bbox:
-            raise ValueError("Sample has already bboxes")
-
-        bboxes = []
-        for l in yolo_lines:
-            label_id, cx, cy, w, h = list(map(float, l.replace("\n", "").split()))
-            label_id = int(label_id)
-            bboxes.append(
-                UNBBox(coords=[cx, cy, w, h], format="yolo", label_id=label_id)
-            )
-        self.bbox = bboxes
-
-        return self
-
-    def yolo_dumps(self):
-        sample = self.bbox_convert(to_format="yolo", inplace=False)
-
-        if not sample.bbox:
-            return ""  # Return an empty string if no bounding boxes exist
-
-        yolos_str = []
-        if sample.bbox:
-            for bbox in sample.bbox:
-                bbox_str = f"{bbox.label_id} {bbox.coords[0]} {bbox.coords[1]} {bbox.coords[2]} {bbox.coords[3]}"
-                yolos_str.append(bbox_str)
-
-        return "\n".join(yolos_str)
 
     def voc_dumps(self, labels_map: Optional[Dict[int, str]] = None):
         # TODO: handle image channels

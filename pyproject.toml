@@ -1,3 +1,8 @@
+[tool.setuptools.packages.find]
+include = ["undata*"]
+exclude = ["tests*", "test_datasets*"]
+
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"

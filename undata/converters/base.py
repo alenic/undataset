@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
+    from undata.undataset import UNDataset, UNSample
 
 
 class UNDatasetReader(ABC):

@@ -1,15 +1,34 @@
 import os
 import yaml
 from tqdm import tqdm
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from undata.converters.base import UNDatasetReader
+from undata import UNBBox
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
+    from undata.undataset import UNDataset, UNSample
 
 
 class YOLOReader(UNDatasetReader):
+
+    def read_sample(
+        self,
+         yolo_lines: List[str]
+    ) -> "UNSample":
+        
+        bboxes = []
+        for l in yolo_lines:
+            try:
+                label_id, cx, cy, w, h = list(map(float, l.replace("\n", "").split()))
+                label_id = int(label_id)
+                bboxes.append(
+                    UNBBox(coords=[cx, cy, w, h], format="yolo", label_id=label_id)
+                )
+            except:
+                print("Error in parsing line:", l)
+        
+        return UNSample(bbox=bboxes)
 
     def read(
         self,
@@ -101,7 +120,7 @@ class YOLOReader(UNDatasetReader):
                 with open(annotation_global_path, "r") as fp:
                     yolo_lines = fp.readlines()
 
-                sample.yolo_loads(yolo_lines)
+                sample = self.read_sample(yolo_lines)
                 sample.compute_image_wh(undataset.rootdir)
 
                 undataset.append(sample)

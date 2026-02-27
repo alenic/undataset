@@ -16,7 +16,7 @@ from undata.converters.yolo import YOLOConverter
 
 class UNDataset(BaseModel):
     rootdir: str = "."
-    labels_map: Optional[Dict[int, str]] = None
+    labels_map: Optional[Union[Dict[int, str], List[str]]] = None
     tags_map: Optional[Dict[int, str]] = None
 
     sample: Dict[int, UNSample] = Field(default_factory=dict)
@@ -151,7 +151,7 @@ class UNDataset(BaseModel):
 
         return list(hashes.values())
 
-    def bbox_convert(self, to_format: BBoxFormatType, inplace: bool = True):
+    def bbox_convert(self, to_format: BBoxFormatType, inplace: bool = False):
         # Return a copy of the dataset
         if not inplace:
             new_dataset = copy.deepcopy(self)
@@ -356,6 +356,7 @@ class UNDataset(BaseModel):
 
         return self
 
+    # ========= YOLO Converter ===========
     def export_to_yolo(self, ann_path: str, exist_ok: bool = True):
         return YOLOConverter.write(
             self,
@@ -376,6 +377,7 @@ class UNDataset(BaseModel):
             images_root,
             images_lead,
         )
+    # ==================================
 
     def export_to_voc(self, ann_path: str):
         export = False
