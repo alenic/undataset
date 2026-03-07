@@ -103,34 +103,3 @@ class BBoxConverter:
         xywh = BBoxConverter.yolo_to_xywh(yolo, img_width, img_height)
         return BBoxConverter.xywh_to_rel_xywh(xywh, img_width, img_height)
 
-
-conversion_map = {
-    ("rel_xywh", "xywh"): lambda coords, w, h, r: BBoxConverter.rel_xywh_to_xywh(
-        coords, w, h, r
-    ),
-    ("rel_xywh", "xyxy"): lambda coords, w, h, r: BBoxConverter.rel_xywh_to_xyxy(
-        coords, w, h, r
-    ),
-    ("rel_xywh", "yolo"): lambda coords, w, h, r: BBoxConverter.rel_xywh_to_yolo(
-        coords
-    ),
-    ("xywh", "rel_xywh"): lambda coords, w, h, r: BBoxConverter.xywh_to_rel_xywh(
-        coords, w, h
-    ),
-    ("xywh", "xyxy"): lambda coords, w, h, r: BBoxConverter.xywh_to_xyxy(coords, r),
-    ("xywh", "yolo"): lambda coords, w, h, r: BBoxConverter.xywh_to_yolo(coords, w, h),
-    ("xyxy", "rel_xywh"): lambda coords, w, h, r: BBoxConverter.xyxy_to_rel_xywh(
-        coords, w, h
-    ),
-    ("xyxy", "xywh"): lambda coords, w, h, r: BBoxConverter.xyxy_to_xywh(coords, r),
-    ("xyxy", "yolo"): lambda coords, w, h, r: BBoxConverter.xyxy_to_yolo(coords, w, h),
-    ("yolo", "rel_xywh"): lambda coords, w, h, r: BBoxConverter.yolo_to_rel_xywh(
-        coords, w, h
-    ),
-    ("yolo", "xywh"): lambda coords, w, h, r: BBoxConverter.yolo_to_xywh(
-        coords, w, h, r
-    ),
-    ("yolo", "xyxy"): lambda coords, w, h, r: BBoxConverter.yolo_to_xyxy(
-        coords, w, h, r
-    ),
-}

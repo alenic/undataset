@@ -1,14 +1,11 @@
-import copy
 import os
 from typing import List, Optional, Dict, Union
 
-import numpy as np
 import pandas as pd
 from PIL import Image
 from pydantic import BaseModel
 from collections import defaultdict
 
-from undata.bbox_converter import conversion_map
 from undata.untypes import BBoxFormatType
 from undata.unbbox import UNBBox
 
@@ -54,7 +51,7 @@ class UNSample(BaseModel):
                 self.bbox = keep_bbox
             return self
         else:
-            sample = copy.deepcopy(self)
+            sample = self.model_copy(deep=True)
             if sample.bbox is not None:
                 for bb in sample.bbox:
                     if bb.label_id in keep_ids:
@@ -169,7 +166,7 @@ class UNSample(BaseModel):
         to_format: BBoxFormatType,
         rounded: bool = False,
         inplace: bool = True,
-    ):
+    ) -> "UNSample":
         if not self.bbox:
             return (
                 self
@@ -188,39 +185,13 @@ class UNSample(BaseModel):
 
         if inplace:
             for bb in self.bbox:
-                src, dst = bb.format, to_format
-                if src == dst:
-                    continue
-                key = (src, dst)
-                if key not in conversion_map:
-                    raise ValueError(f"Conversion from {src} to {dst} is not supported")
-                new_coords = conversion_map[key](
-                    bb.coords, self.image_w, self.image_h, rounded
-                )
-                bb.coords = new_coords
-                bb.format = dst
+                bb.convert(to_format, self.image_w, self.image_h, rounded=rounded, inplace=True)
             return self
         else:
             new_bboxes = []
             for bb in self.bbox:
-                src, dst = bb.format, to_format
-                if src == dst:
-                    new_bboxes.append(copy.deepcopy(bb))
-                    continue
-                key = (src, dst)
-                if key not in conversion_map:
-                    raise ValueError(f"Conversion from {src} to {dst} is not supported")
-                new_coords = conversion_map[key](
-                    bb.coords, self.image_w, self.image_h, rounded
-                )
-                new_bboxes.append(
-                    UNBBox(
-                        coords=new_coords,
-                        format=dst,
-                        label_id=bb.label_id,
-                        score=bb.score,
-                    )
-                )
+                new_bboxes.append(bb.convert(to_format, self.image_w, self.image_h, rounded=rounded, inplace=False))
+
             return UNSample(
                 image_path=self.image_path,
                 image_h=self.image_h,

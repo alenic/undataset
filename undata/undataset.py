@@ -2,6 +2,7 @@ import copy
 import os
 import hashlib
 from typing import List, Dict, Optional, Union
+
 from collections import defaultdict
 
 import pandas as pd
@@ -42,16 +43,9 @@ class UNDataset(BaseModel):
             return
         self._next_sample_id = max(self.sample.keys()) + 1
 
-    def reset_index(self, sort_by_image_path: bool = True) -> "UNDataset":
-        if sort_by_image_path:
-            sorted_items = sorted(self.sample.items(), key=lambda item: item[1].image_path)
-            self.sample = {i: v for i, (_, v) in enumerate(sorted_items)}
-        else:
-            self.sample = {i: v for i, v in enumerate(self.sample.values())}
 
+    def model_post_init(self, __context):
         self._refresh_next_sample_id()
-        return self
-
     # ===================== Basic Operations ======================
 
     def append(self, sample: UNSample) -> "UNDataset":
@@ -66,6 +60,9 @@ class UNDataset(BaseModel):
         -------
         The same UNDataset
         """
+        if not isinstance(sample, UNSample):
+            raise TypeError()
+
         if self._next_sample_id in self.sample:
             self._refresh_next_sample_id()
 
@@ -88,17 +85,17 @@ class UNDataset(BaseModel):
         The same UNDataset
         """
         if idx not in self.sample:
-            raise IndexError()
+            raise IndexError(f"Index {idx} does not exists")
 
         del self.sample[idx]
         return self
     
     def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
-            raise IndexError()
+            raise IndexError(f"Index {idx} does not exists")
 
-        s = self.sample[idx]
-        return s.model_copy(deep=True) if not inplace else s
+        sample = self.sample[idx]
+        return sample.model_copy(deep=True) if not inplace else sample
 
     def items(self, inplace: bool = False):
         for idx in self.sample.keys():
@@ -114,28 +111,34 @@ class UNDataset(BaseModel):
     def __len__(self) -> int:
         return len(self.sample)
 
-    def set_labels_map(self, labels_map: Union[Dict[int, str], List[str]]):
-        self.labels_map = copy.deepcopy(labels_map)
+    def set_rootdir(self, rootdir: str, check: bool = False):
+        if check:
+            if not os.path.exists(rootdir):
+                raise FileNotFoundError(f"Root directory does not exist: {rootdir}")
+            if not os.path.isdir(rootdir):
+                raise NotADirectoryError(f"Root path is not a directory: {rootdir}")
 
-    def set_tags_map(self, tags_map: Union[Dict[int, str], List[str]]):
-        if isinstance(tags_map, list):
-            self.tags_map = {k: tags_map[k] for k in range(len(tags_map))}
-        else:
-            self.tags_map = copy.deepcopy(tags_map)
-
-    def set_rootdir(self, rootdir: str):
         self.rootdir = rootdir
 
+    def set_labels_map(self, labels_map: Union[Dict[int, str], List[str]]):
+        self.labels_map = self._normalize_map(copy.deepcopy(labels_map))
 
+    def set_tags_map(self, tags_map: Union[Dict[int, str], List[str]]):
+        self.tags_map = self._normalize_map(copy.deepcopy(tags_map))
 
+    def reset_index(self) -> "UNDataset":
+        sorted_index = sorted(self.sample.keys())
+        self.sample = {i: v for i, v in enumerate(sorted_index)}
+        self._refresh_next_sample_id()
+        return self
 
     # =================== Helpers ===============================
 
     def get_image_paths(self) -> List[str]:
         image_paths = []
 
-        for k, s in self.sample.items():
-            image_paths.append(os.path.join(self.rootdir, s.image_path))
+        for sample in self.sample.values():
+            image_paths.append(os.path.join(self.rootdir, sample.image_path))
 
         return image_paths
 
@@ -162,22 +165,6 @@ class UNDataset(BaseModel):
                 self.sample[idx].remap_label_ids(remap_dict)
 
             self.set_labels_map(new_labels_map)
-
-        return self
-
-    def filter_bbox_labels(self, keep_ids: List, inplace=False):
-        if not inplace:
-            dataset_res = self.model_copy(deep=True)
-        for idx in tqdm(self.sample.keys(), desc="Filtering BBoxes"):
-            if inplace:
-                self.sample[idx].filter_bbox_labels(keep_ids=keep_ids, inplace=True)
-            else:
-
-                dataset_res.get_sample(idx, inplace=True).filter_bbox_labels(
-                    keep_ids=keep_ids, inplace=True
-                )
-        if not inplace:
-            return dataset_res
 
         return self
 
@@ -307,6 +294,22 @@ class UNDataset(BaseModel):
         return stats
 
     # =================== Filters ===============================
+    def filter_bbox_labels(self, keep_ids: List, inplace=False):
+        if not inplace:
+            dataset_res = self.model_copy(deep=True)
+        for idx in tqdm(self.sample.keys(), desc="Filtering BBoxes"):
+            if inplace:
+                self.sample[idx].filter_bbox_labels(keep_ids=keep_ids, inplace=True)
+            else:
+
+                dataset_res.get_sample(idx, inplace=True).filter_bbox_labels(
+                    keep_ids=keep_ids, inplace=True
+                )
+        if not inplace:
+            return dataset_res
+
+        return self
+    
     def filter_image_size(
         self,
         min_width: Optional[int] = None,
@@ -474,5 +477,4 @@ class UNDataset(BaseModel):
                 image_name, _ = os.path.splitext(image_name)
                 with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
                     fp.write(voc_str)
-
 
