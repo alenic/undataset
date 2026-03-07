@@ -90,7 +90,7 @@ for img_file in image_files:
         dataset.append(sample)
 
 dataset.compute_image_wh()
-df = dataset.as_dataframe()
+df = dataset.to_dataframe()
 print(df)
 
 # df = dataset.as_dataframe()
@@ -98,5 +98,5 @@ print(df)
 
 
 yolo_anns_dir = os.path.join(data_dir, "anns")
-dataset.export_to_yolo(ann_path=yolo_anns_dir, exist_ok=True)
+dataset.to_yolo(ann_path=yolo_anns_dir, exist_ok=True)
 

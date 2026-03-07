@@ -1,12 +1,11 @@
 import copy
 import os
 import hashlib
-import yaml
 from typing import List, Dict, Optional, Union
 from collections import defaultdict
 
 import pandas as pd
-from pydantic import BaseModel, PrivateAttr, Field
+from pydantic import BaseModel, PrivateAttr, Field, field_validator
 from tqdm import tqdm
 
 from undata.unsample import UNSample
@@ -16,40 +15,84 @@ from undata.converters.yolo import YOLOConverter
 
 class UNDataset(BaseModel):
     rootdir: str = "."
-    labels_map: Optional[Union[Dict[int, str], List[str]]] = None
-    tags_map: Optional[Dict[int, str]] = None
+    labels_map: Optional[Dict[int, str]] = Field(default=None, exclude_if=lambda x: x is None)
+    tags_map: Optional[Dict[int, str]] = Field(default=None, exclude_if=lambda x: x is None)
 
     sample: Dict[int, UNSample] = Field(default_factory=dict)
-    _path_to_id_map: Dict[str, int] = PrivateAttr(default_factory=dict)  # initial value
+    _next_sample_id: int = PrivateAttr(default=0)
 
-    def append(self, sample: UNSample) -> "UNDataset":
-        new_id = len(self.sample)
-        while new_id in self.sample:
-            new_id += 1
+    #===================== Internal Operations ===================
 
-        self.sample[new_id] = sample
-        # Keep track of the id, given an image path
-        self._path_to_id_map[sample.image_path] = new_id
-        return self
+    @field_validator("labels_map", "tags_map", mode="before")
+    @classmethod
+    def _normalize_map(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return {i: name for i, name in enumerate(v)}
+        if isinstance(v, dict):
+            # normalize keys to int in case they come as "0", "1", ...
+            return {int(k): str(val) for k, val in v.items()}
+        raise TypeError("Expected list[str] or dict[int, str]")
 
-    def get_paths_to_ids(self):
-        for idx, sample in self.sample.items():
-            self._path_to_id_map[sample.image_path] = idx
+
+    def _refresh_next_sample_id(self):
+        if not self.sample:
+            self._next_sample_id = 0
+            return
+        self._next_sample_id = max(self.sample.keys()) + 1
 
     def reset_index(self, sort_by_image_path: bool = True) -> "UNDataset":
         if sort_by_image_path:
-            sorted_sample = {
-                k: v
-                for k, v in sorted(
-                    self.sample.items(), key=lambda item: item[1].image_path
-                )
-            }
-            self.sample = sorted_sample
+            sorted_items = sorted(self.sample.items(), key=lambda item: item[1].image_path)
+            self.sample = {i: v for i, (_, v) in enumerate(sorted_items)}
         else:
             self.sample = {i: v for i, v in enumerate(self.sample.values())}
 
+        self._refresh_next_sample_id()
         return self
 
+    # ===================== Basic Operations ======================
+
+    def append(self, sample: UNSample) -> "UNDataset":
+        """
+        Append a sample to the dataset. You have to create an UNSample first
+
+        Parameters
+        ----------
+        sample : UNSample
+
+        Returns
+        -------
+        The same UNDataset
+        """
+        if self._next_sample_id in self.sample:
+            self._refresh_next_sample_id()
+
+        new_id = self._next_sample_id
+        self.sample[new_id] = sample
+        self._next_sample_id = new_id + 1
+        return self
+    
+    def delete(self, idx: int) -> "UNDataset":
+        """
+        Delete a specific sample, given its id
+    
+        Parameters
+        ----------
+        idx : int
+        The id of the sample that has to be deleted
+
+        Returns
+        -------
+        The same UNDataset
+        """
+        if idx not in self.sample:
+            raise IndexError()
+
+        del self.sample[idx]
+        return self
+    
     def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
             raise IndexError()
@@ -57,19 +100,22 @@ class UNDataset(BaseModel):
         s = self.sample[idx]
         return s.model_copy(deep=True) if not inplace else s
 
-    def get_image_paths(self) -> List[str]:
-        image_paths = []
+    def items(self, inplace: bool = False):
+        for idx in self.sample.keys():
+            yield idx, self.get_sample(idx, inplace=inplace)
 
-        for k, s in self.sample.items():
-            image_paths.append(os.path.join(self.rootdir, s.image_path))
+    def __iter__(self):
+        for idx in self.sample.keys():
+            yield self.get_sample(idx)
 
-        return image_paths
+    def __getitem__(self, idx: int) -> UNSample:
+        return self.get_sample(idx)
+
+    def __len__(self) -> int:
+        return len(self.sample)
 
     def set_labels_map(self, labels_map: Union[Dict[int, str], List[str]]):
-        if isinstance(labels_map, list):
-            self.labels_map = {k: labels_map[k] for k in range(len(labels_map))}
-        else:
-            self.labels_map = copy.deepcopy(labels_map)
+        self.labels_map = copy.deepcopy(labels_map)
 
     def set_tags_map(self, tags_map: Union[Dict[int, str], List[str]]):
         if isinstance(tags_map, list):
@@ -80,7 +126,20 @@ class UNDataset(BaseModel):
     def set_rootdir(self, rootdir: str):
         self.rootdir = rootdir
 
-    # =================== Utility ===============================
+
+
+
+    # =================== Helpers ===============================
+
+    def get_image_paths(self) -> List[str]:
+        image_paths = []
+
+        for k, s in self.sample.items():
+            image_paths.append(os.path.join(self.rootdir, s.image_path))
+
+        return image_paths
+
+
     def remap_labels(self, remap_dict: Dict[int, int], new_labels_map: Dict[int, str]):
         if self.labels_map is not None and remap_dict is not None:
             # Assert that everything is coherent
@@ -323,18 +382,26 @@ class UNDataset(BaseModel):
                 continue
         return filtered
 
-    # =================== Import/Export =========================
-    def export_to_json(self, json_file: str, indent: int = 2):
+    # =================== Conversion Methods =========================
+
+    # --------- JSON
+    def to_json(self, json_file: str, indent: int = 2):
+        json_str = self.model_dump_json(indent=indent)
+
         with open(json_file, "w") as fp:
-            fp.write(self.model_dump_json(indent=indent))
+            fp.write(json_str)
 
-    def load_from_json(self, json_file: str):
+    @classmethod
+    def read_json(cls, json_file: str) -> "UNDataset":
         with open(json_file, "r") as fp:
-            self = self.model_validate_json(fp.read())
+            json_str = fp.read()
+        
+        undataset = UNDataset().model_validate_json(json_str)
 
-        return self
+        return undataset
 
-    def as_dataframe(self):
+    # --------- Pandas Dataframe
+    def to_dataframe(self) -> pd.DataFrame:
         df = pd.DataFrame()
         frames = []
         for idx in tqdm(self.sample.keys(), desc="Convert UNDataset as DataFrame"):
@@ -345,41 +412,48 @@ class UNDataset(BaseModel):
         df = pd.concat(frames, ignore_index=True)
 
         return df.reset_index(drop=True)
+    
+    @classmethod
+    def read_dataframe(cls, df, rootdir:str = ".") -> "UNDataset":
+        undataset = UNDataset(rootdir=rootdir)
 
-    def from_dataframe(self, df):
         grouped_df = df.groupby("index")
         for idx, group in tqdm(
             grouped_df,
             desc="Loading from Dataframe",
         ):
-            self.sample[idx] = UNSample.from_dataframe(group)
+            undataset.sample[idx] = UNSample.from_dataframe(group)
 
-        return self
+        undataset._refresh_next_sample_id()
+        return undataset
 
-    # ========= YOLO Converter ===========
-    def export_to_yolo(self, ann_path: str, exist_ok: bool = True):
+    # --------- YOLO
+    def to_yolo(self, ann_path: str, exist_ok: bool = True):
         return YOLOConverter.write(
             self,
             ann_path,
             exist_ok,
         )
 
-    def load_from_yolo(
-        self,
+    @classmethod
+    def read_yolo(
+        cls,
         classes_path: str,
         anns_root: str,
         images_root: str,
         images_lead: bool = True,
-    ):
-        return YOLOConverter.read(
+    )-> "UNDataset":
+        
+        undataset = YOLOConverter.read(
             classes_path,
             anns_root,
             images_root,
             images_lead,
         )
-    # ==================================
+        return undataset
 
-    def export_to_voc(self, ann_path: str):
+    # --------- VOC
+    def to_voc(self, ann_path: str):
         export = False
         if os.path.exists(ann_path):
             accept = input(
@@ -401,12 +475,4 @@ class UNDataset(BaseModel):
                 with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
                     fp.write(voc_str)
 
-    def __iter__(self):
-        for i in range(len(self.sample)):
-            yield self.get_sample(i)
 
-    def __len__(self) -> int:
-        return len(self.sample)
-
-    def __getitem__(self, idx: int) -> UNSample:
-        return self.get_sample(idx)
