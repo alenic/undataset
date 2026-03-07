@@ -1,4 +1,4 @@
 # UNDataset
 
-UNiversal Dataset - Utility tools for transforming, cleaning, editing and converting computer vision datasets
+UNiversal Dataset - Utility tools for manipulating, transforming, converting and converting **Computer Vision** datasets.
 

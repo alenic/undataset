@@ -7,7 +7,7 @@ from undata.converters.base import UNDatasetReader
 from undata import UNBBox
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset, UNSample
+    from undata.undataset import UNSample
 
 
 class YOLOReader(UNDatasetReader):
@@ -33,15 +33,15 @@ class YOLOReader(UNDatasetReader):
     def read(
         self,
         classes_path: str,
-        anns_root: str,
-        images_root: str,
+        annotations_dir: str,
+        images_dir: str,
         images_lead: bool = True,
     ):
-        if not os.path.exists(anns_root):
-            raise ValueError(f"Annotation path: {anns_root} does not exists")
+        if not os.path.exists(annotations_dir):
+            raise ValueError(f"Annotation path: {annotations_dir} does not exists")
 
-        if not os.path.exists(images_root):
-            raise ValueError(f"Images path: {images_root} does not exists")
+        if not os.path.exists(images_dir):
+            raise ValueError(f"Images path: {images_dir} does not exists")
 
         if not os.path.exists(classes_path):
             raise ValueError(f"Classes path: {classes_path} does not exists")
@@ -60,10 +60,10 @@ class YOLOReader(UNDatasetReader):
         from undata.unsample import UNSample
 
         labels_map = {idx: name for idx, name in enumerate(classes["names"])}
-        undataset = UNDataset(rootdir=images_root, labels_map=labels_map)
+        undataset = UNDataset(rootdir=images_dir, labels_map=labels_map)
         # Get the filenames
-        images_list = os.listdir(images_root)
-        anns_list = os.listdir(anns_root)
+        images_list = os.listdir(images_dir)
+        anns_list = os.listdir(annotations_dir)
 
         image_names = dict([(os.path.splitext(i)[0], i) for i in images_list])
         annotation_names = dict([(os.path.splitext(a)[0], a) for a in anns_list])
@@ -80,7 +80,7 @@ class YOLOReader(UNDatasetReader):
 
                 # Check if exists a related annotation
                 annotation_global_path = os.path.join(
-                    anns_root,
+                    annotations_dir,
                     img_name + ".txt",
                 )
 
@@ -101,7 +101,7 @@ class YOLOReader(UNDatasetReader):
 
                 # Check if the associated image exists
                 image_glob_path = os.path.join(
-                    images_root,
+                    images_dir,
                     image_names[ann_name],
                 )
                 # It's a double check
@@ -113,7 +113,7 @@ class YOLOReader(UNDatasetReader):
                 )
 
                 annotation_global_path = os.path.join(
-                    anns_root,
+                    annotations_dir,
                     ann_name + ".txt",
                 )
 

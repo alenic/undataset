@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from undata.unsample import UNSample
 from undata.untypes import BBoxFormatType
-from undata.converters.yolo import YOLOConverter
+from undata.converters import YOLOConverter, VOCConverter
 
 
 class UNDataset(BaseModel):
@@ -90,14 +90,14 @@ class UNDataset(BaseModel):
         del self.sample[idx]
         return self
     
-    def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
+    def get_sample(self, idx: int, inplace: bool = True) -> UNSample:
         if idx not in self.sample:
             raise IndexError(f"Index {idx} does not exists")
 
         sample = self.sample[idx]
         return sample.model_copy(deep=True) if not inplace else sample
 
-    def items(self, inplace: bool = False):
+    def items(self, inplace: bool = True):
         for idx in self.sample.keys():
             yield idx, self.get_sample(idx, inplace=inplace)
 
@@ -106,7 +106,7 @@ class UNDataset(BaseModel):
             yield self.get_sample(idx)
 
     def __getitem__(self, idx: int) -> UNSample:
-        return self.get_sample(idx)
+        return self.get_sample(idx, inplace=True)
 
     def __len__(self) -> int:
         return len(self.sample)
@@ -173,7 +173,6 @@ class UNDataset(BaseModel):
             self.sample[idx].compute_image_wh(self.rootdir)
 
     def find_duplicate_images(self) -> List[int]:
-
         def compute_image_hash(image_path: str, hash_algo="md5") -> str:
             hash_func = hashlib.new(hash_algo)
             with open(image_path, "rb") as f:
@@ -294,7 +293,7 @@ class UNDataset(BaseModel):
         return stats
 
     # =================== Filters ===============================
-    def filter_bbox_labels(self, keep_ids: List, inplace=False):
+    def filter_bbox_labels(self, keep_ids: List[int], inplace=False):
         if not inplace:
             dataset_res = self.model_copy(deep=True)
         for idx in tqdm(self.sample.keys(), desc="Filtering BBoxes"):
@@ -388,12 +387,6 @@ class UNDataset(BaseModel):
     # =================== Conversion Methods =========================
 
     # --------- JSON
-    def to_json(self, json_file: str, indent: int = 2):
-        json_str = self.model_dump_json(indent=indent)
-
-        with open(json_file, "w") as fp:
-            fp.write(json_str)
-
     @classmethod
     def read_json(cls, json_file: str) -> "UNDataset":
         with open(json_file, "r") as fp:
@@ -403,19 +396,14 @@ class UNDataset(BaseModel):
 
         return undataset
 
+    def to_json(self, json_file: str, indent: int = 2):
+        json_str = self.model_dump_json(indent=indent)
+
+        with open(json_file, "w") as fp:
+            fp.write(json_str)
+
+
     # --------- Pandas Dataframe
-    def to_dataframe(self) -> pd.DataFrame:
-        df = pd.DataFrame()
-        frames = []
-        for idx in tqdm(self.sample.keys(), desc="Convert UNDataset as DataFrame"):
-            sample_df = self.sample[idx].as_dataframe()
-            sample_df["index"] = idx
-            frames.append(sample_df)
-
-        df = pd.concat(frames, ignore_index=True)
-
-        return df.reset_index(drop=True)
-    
     @classmethod
     def read_dataframe(cls, df, rootdir:str = ".") -> "UNDataset":
         undataset = UNDataset(rootdir=rootdir)
@@ -429,8 +417,37 @@ class UNDataset(BaseModel):
 
         undataset._refresh_next_sample_id()
         return undataset
+    
+    def to_dataframe(self) -> pd.DataFrame:
+        df = pd.DataFrame()
+        frames = []
+        for idx in tqdm(self.sample.keys(), desc="Convert UNDataset as DataFrame"):
+            sample_df = self.sample[idx].as_dataframe()
+            sample_df["index"] = idx
+            frames.append(sample_df)
+
+        df = pd.concat(frames, ignore_index=True)
+
+        return df.reset_index(drop=True)
 
     # --------- YOLO
+    @classmethod
+    def read_yolo(
+        cls,
+        classes_path: str,
+        annotations_dir: str,
+        images_dir: str,
+        images_lead: bool = True,
+    )-> "UNDataset":
+        
+        undataset = YOLOConverter.read(
+            classes_path,
+            annotations_dir,
+            images_dir,
+            images_lead,
+        )
+        return undataset
+
     def to_yolo(self, ann_path: str, exist_ok: bool = True):
         return YOLOConverter.write(
             self,
@@ -438,43 +455,27 @@ class UNDataset(BaseModel):
             exist_ok,
         )
 
+    # --------- VOC
+
     @classmethod
-    def read_yolo(
+    def read_voc(
         cls,
-        classes_path: str,
-        anns_root: str,
-        images_root: str,
+        annotations_dir: str,
+        images_dir: str,
         images_lead: bool = True,
     )-> "UNDataset":
         
-        undataset = YOLOConverter.read(
-            classes_path,
-            anns_root,
-            images_root,
+        undataset = VOCConverter.read(
+            annotations_dir,
+            images_dir,
             images_lead,
         )
         return undataset
 
-    # --------- VOC
-    def to_voc(self, ann_path: str):
-        export = False
-        if os.path.exists(ann_path):
-            accept = input(
-                f"{ann_path} already exists, do you want to conitnue? (y/n): "
-            )
-            if (accept.lower().strip() == "y") | (accept.lower().strip() == "yes"):
-                export = True
-            else:
-                export = False
-        else:
-            os.makedirs(ann_path, exist_ok=True)
-            export = True
-
-        if export:
-            for idx in tqdm(self.sample.keys(), desc=f"Exporting to yolo annotations"):
-                voc_str = self.sample[idx].voc_dumps(self.labels_map)
-                image_name = os.path.basename(self.sample[idx].image_path)
-                image_name, _ = os.path.splitext(image_name)
-                with open(os.path.join(ann_path, image_name + ".txt"), "w") as fp:
-                    fp.write(voc_str)
+    def to_voc(self, ann_path: str, exist_ok: bool = True):
+        VOCConverter.write(
+            self,
+            ann_path,
+            exist_ok
+        )
 
