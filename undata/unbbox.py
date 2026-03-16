@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Optional
 from pydantic import BaseModel
 from undata.untypes import BBoxFormatType
 from undata.bbox_converter import BBoxConverter
@@ -37,21 +37,30 @@ conversion_map = {
     ),
 }
 
+
 class UNBBox(BaseModel):
     coords: tuple[Number, Number, Number, Number]
     format: BBoxFormatType
     label_id: Optional[int] = None
     score: Optional[float] = None
 
-    def convert(self, format: BBoxFormatType, image_w: int, image_h: int, rounded:bool=True, inplace: bool = False) -> "UNBBox":
-        new_coords = conversion_map[(self.format, format)](self.coords, image_w, image_h, rounded)
+    def convert(
+        self,
+        format: BBoxFormatType,
+        image_w: int,
+        image_h: int,
+        rounded: bool = True,
+        inplace: bool = False,
+    ) -> "UNBBox":
+        new_coords = conversion_map[(self.format, format)](
+            self.coords, image_w, image_h, rounded
+        )
         if inplace:
             self.coords = new_coords
             self.format = format
             return self
-        
+
         bbox = self.model_copy(deep=True)
         bbox.coords = new_coords
         bbox.format = format
         return bbox
-
