@@ -1,12 +1,12 @@
 import os
 import xml.etree.ElementTree as ET
-from tqdm import tqdm
 from typing import TYPE_CHECKING, Dict, List, Tuple
 
-from undata.undataset import UNDataset
-from undata.unsample import UNSample
-from undata.converters.base import UNDatasetReader
+from tqdm import tqdm
+
 from undata import UNBBox
+from undata.converters.base import UNDatasetReader
+from undata.unsample import UNSample
 
 if TYPE_CHECKING:
     from undata.unsample import UNSample
@@ -75,6 +75,8 @@ class VOCReader(UNDatasetReader):
         images_dir: str,
         images_lead: bool = True,
     ):
+        from undata.undataset import UNDataset
+
         if not os.path.exists(annotations_dir):
             raise ValueError(f"Annotation path: {annotations_dir} does not exists")
 

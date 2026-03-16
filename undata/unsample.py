@@ -2,7 +2,7 @@ import os
 from typing import List, Optional, Dict, Union
 
 import pandas as pd
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 from collections import defaultdict
 
@@ -17,12 +17,7 @@ class UNSample(BaseModel):
     bbox: Optional[List[UNBBox]] = None  # BBox
     tag_id: Optional[List[int]] = None  # Tags
 
-    def as_json(self) -> str:
-        return self.model_dump_json(indent=2)
 
-    @classmethod
-    def from_json(cls, json_str: str, strict: Optional[bool] = None):
-        return cls.model_validate_json(json_str, strict=strict)
 
     def add_bbox(
         self,
@@ -40,6 +35,15 @@ class UNSample(BaseModel):
         self.bbox.append(
             UNBBox(coords=coords, format=format, label_id=label_id, score=score)
         )
+
+
+
+    def as_json(self) -> str:
+        return self.model_dump_json(indent=2)
+
+    @classmethod
+    def from_json(cls, json_str: str, strict: Optional[bool] = None):
+        return cls.model_validate_json(json_str, strict=strict)
 
     def filter_bbox_labels(self, keep_ids: List, inplace=False):
         keep_bbox = []
@@ -62,24 +66,23 @@ class UNSample(BaseModel):
     def compute_image_wh(self, rootdir: str):
         path = os.path.join(rootdir, self.image_path)
         if not os.path.exists(path):
-            raise ValueError(f"Image {path} does not exists")
+            raise FileNotFoundError(f"Image {path} does not exists")
 
         try:
+            # Image.open is lazy, so it reads only the header without decoding the full image
             with Image.open(path) as img:
-                w, h = img.size
-            self.image_w = w
-            self.image_h = h
-            return w, h
-        except Exception as e:
-            raise ValueError(f"Failed to open image {path}: {str(e)}")
+                self.image_w, self.image_h = img.size
+            return self.image_w, self.image_h
+        except (UnidentifiedImageError, OSError) as e:
+            raise ValueError(f"Failed to open image {path}: {e}") from e
 
-    def get_labels_counts(self):
+    def get_label_counts(self):
         label_counts = defaultdict(int)
         if self.bbox:
             for bbox in self.bbox:
                 if bbox.label_id is not None:
                     label_counts[bbox.label_id] += 1
-        return label_counts
+        return dict(label_counts)
 
     def as_dataframe(self):
         NA = pd.NA
@@ -216,50 +219,3 @@ class UNSample(BaseModel):
         self.bbox = keep if keep else None
         return self
 
-
-    def voc_dumps(self, labels_map: Optional[Dict[int, str]] = None):
-        # TODO: handle image channels
-        sample = self.bbox_convert(to_format="xyxy", rounded=True, inplace=False)
-
-        if not sample.bbox:
-            return ""  # Return an empty string if no bounding boxes exist
-
-        voc_str = f"""
-<annotation>
-    <folder></folder>
-    <filename>{sample.image_path}</filename>
-    <path>{sample.image_path}</path>
-
-    <size>
-        <width>{sample.image_w}</width>
-        <height>{sample.image_h}</height>
-        <depth>3</depth>
-    </size>
-
-    <segmented>0</segmented>
-
-"""
-        if sample.bbox:
-            for bbox in sample.bbox:
-                if labels_map:
-                    label_name = labels_map[bbox.label_id]
-                else:
-                    label_name = bbox.label_id
-
-                object_template = f"""
-    <object>
-        <name>{label_name}</name>
-        <pose>Unspecified</pose>
-        <truncated>0</truncated>
-        <difficult>0</difficult>
-        <bndbox>
-            <xmin>{bbox.coords[0]}</xmin>
-            <ymin>{bbox.coords[1]}</ymin>
-            <xmax>{bbox.coords[2]}</xmax>
-            <ymax>{bbox.coords[3]}</ymax>
-        </bndbox>
-    </object>
-"""
-                voc_str += object_template
-
-        return voc_str + "\n</annotation>"

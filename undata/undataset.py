@@ -208,10 +208,10 @@ class UNDataset(BaseModel):
 
         return self
 
-    def get_labels_counts(self):
+    def get_label_counts(self):
         label_counts = defaultdict(int)
         for idx in tqdm(self.sample.keys(), desc=f"Counting BBoxes labels"):
-            sample_label_counts = self.sample[idx].get_labels_counts()
+            sample_label_counts = self.sample[idx].get_label_counts()
             for cidx, count_value in sample_label_counts.items():
                 label_counts[cidx] += count_value
         return label_counts
@@ -231,7 +231,7 @@ class UNDataset(BaseModel):
         bbox_heights = []
         bbox_areas = []
 
-        label_counts = self.get_labels_counts()
+        label_counts = self.get_label_counts()
         label_counts = dict(label_counts)
         sorted_dict = dict(sorted(label_counts.items()))
         stats["num_bboxes_per_label_id"] = sorted_dict
