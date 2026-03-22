@@ -16,13 +16,17 @@ from undata.converters import YOLOConverter, VOCConverter
 
 class UNDataset(BaseModel):
     rootdir: str = "."
-    labels_map: Optional[Dict[int, str]] = Field(default=None, exclude_if=lambda x: x is None)
-    tags_map: Optional[Dict[int, str]] = Field(default=None, exclude_if=lambda x: x is None)
+    labels_map: Optional[Dict[int, str]] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )
+    tags_map: Optional[Dict[int, str]] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )
 
     sample: Dict[int, UNSample] = Field(default_factory=dict)
     _next_sample_id: int = PrivateAttr(default=0)
 
-    #===================== Internal Operations ===================
+    # ===================== Internal Operations ===================
 
     @field_validator("labels_map", "tags_map", mode="before")
     @classmethod
@@ -36,16 +40,15 @@ class UNDataset(BaseModel):
             return {int(k): str(val) for k, val in v.items()}
         raise TypeError("Expected list[str] or dict[int, str]")
 
-
     def _refresh_next_sample_id(self):
         if not self.sample:
             self._next_sample_id = 0
             return
         self._next_sample_id = max(self.sample.keys()) + 1
 
-
     def model_post_init(self, __context):
         self._refresh_next_sample_id()
+
     # ===================== Basic Operations ======================
 
     def append(self, sample: UNSample) -> "UNDataset":
@@ -70,11 +73,11 @@ class UNDataset(BaseModel):
         self.sample[new_id] = sample
         self._next_sample_id = new_id + 1
         return self
-    
+
     def delete(self, idx: int) -> "UNDataset":
         """
         Delete a specific sample, given its id
-    
+
         Parameters
         ----------
         idx : int
@@ -89,7 +92,7 @@ class UNDataset(BaseModel):
 
         del self.sample[idx]
         return self
-    
+
     def get_sample(self, idx: int, inplace: bool = True) -> UNSample:
         if idx not in self.sample:
             raise IndexError(f"Index {idx} does not exists")
@@ -133,7 +136,6 @@ class UNDataset(BaseModel):
         return self
 
     # =================== Helpers ===============================
-
     def get_image_paths(self) -> List[str]:
         image_paths = []
 
@@ -141,7 +143,6 @@ class UNDataset(BaseModel):
             image_paths.append(os.path.join(self.rootdir, sample.image_path))
 
         return image_paths
-
 
     def remap_labels(self, remap_dict: Dict[int, int], new_labels_map: Dict[int, str]):
         if self.labels_map is not None and remap_dict is not None:
@@ -308,7 +309,7 @@ class UNDataset(BaseModel):
             return dataset_res
 
         return self
-    
+
     def filter_image_size(
         self,
         min_width: Optional[int] = None,
@@ -391,7 +392,7 @@ class UNDataset(BaseModel):
     def read_json(cls, json_file: str) -> "UNDataset":
         with open(json_file, "r") as fp:
             json_str = fp.read()
-        
+
         undataset = UNDataset().model_validate_json(json_str)
 
         return undataset
@@ -402,10 +403,9 @@ class UNDataset(BaseModel):
         with open(json_file, "w") as fp:
             fp.write(json_str)
 
-
     # --------- Pandas Dataframe
     @classmethod
-    def read_dataframe(cls, df, rootdir:str = ".") -> "UNDataset":
+    def read_dataframe(cls, df, rootdir: str = ".") -> "UNDataset":
         undataset = UNDataset(rootdir=rootdir)
 
         grouped_df = df.groupby("index")
@@ -417,7 +417,7 @@ class UNDataset(BaseModel):
 
         undataset._refresh_next_sample_id()
         return undataset
-    
+
     def to_dataframe(self) -> pd.DataFrame:
         df = pd.DataFrame()
         frames = []
@@ -438,8 +438,8 @@ class UNDataset(BaseModel):
         annotations_dir: str,
         images_dir: str,
         images_lead: bool = True,
-    )-> "UNDataset":
-        
+    ) -> "UNDataset":
+
         undataset = YOLOConverter.read(
             classes_path,
             annotations_dir,
@@ -456,15 +456,14 @@ class UNDataset(BaseModel):
         )
 
     # --------- VOC
-
     @classmethod
     def read_voc(
         cls,
         annotations_dir: str,
         images_dir: str,
         images_lead: bool = True,
-    )-> "UNDataset":
-        
+    ) -> "UNDataset":
+
         undataset = VOCConverter.read(
             annotations_dir,
             images_dir,
@@ -473,9 +472,4 @@ class UNDataset(BaseModel):
         return undataset
 
     def to_voc(self, ann_path: str, exist_ok: bool = True):
-        VOCConverter.write(
-            self,
-            ann_path,
-            exist_ok
-        )
-
+        VOCConverter.write(self, ann_path, exist_ok)

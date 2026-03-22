@@ -17,8 +17,6 @@ class UNSample(BaseModel):
     bbox: Optional[List[UNBBox]] = None  # BBox
     tag_id: Optional[List[int]] = None  # Tags
 
-
-
     def add_bbox(
         self,
         coords: List[Union[float, int]],
@@ -35,15 +33,6 @@ class UNSample(BaseModel):
         self.bbox.append(
             UNBBox(coords=coords, format=format, label_id=label_id, score=score)
         )
-
-
-
-    def as_json(self) -> str:
-        return self.model_dump_json(indent=2)
-
-    @classmethod
-    def from_json(cls, json_str: str, strict: Optional[bool] = None):
-        return cls.model_validate_json(json_str, strict=strict)
 
     def filter_bbox_labels(self, keep_ids: List, inplace=False):
         keep_bbox = []
@@ -188,12 +177,22 @@ class UNSample(BaseModel):
 
         if inplace:
             for bb in self.bbox:
-                bb.convert(to_format, self.image_w, self.image_h, rounded=rounded, inplace=True)
+                bb.convert(
+                    to_format, self.image_w, self.image_h, rounded=rounded, inplace=True
+                )
             return self
         else:
             new_bboxes = []
             for bb in self.bbox:
-                new_bboxes.append(bb.convert(to_format, self.image_w, self.image_h, rounded=rounded, inplace=False))
+                new_bboxes.append(
+                    bb.convert(
+                        to_format,
+                        self.image_w,
+                        self.image_h,
+                        rounded=rounded,
+                        inplace=False,
+                    )
+                )
 
             return UNSample(
                 image_path=self.image_path,
@@ -219,3 +218,11 @@ class UNSample(BaseModel):
         self.bbox = keep if keep else None
         return self
 
+    # ================= Conversion =====================
+
+    def to_json(self) -> str:
+        return self.model_dump_json(indent=2)
+
+    @classmethod
+    def read_json(cls, json_str: str, strict: Optional[bool] = None):
+        return cls.model_validate_json(json_str, strict=strict)
