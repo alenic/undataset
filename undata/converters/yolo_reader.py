@@ -3,20 +3,17 @@ import yaml
 from tqdm import tqdm
 from typing import TYPE_CHECKING, List
 
-from undata.converters.base import UNDatasetReader
-from undata import UNBBox
+from undata.unbbox import UNBBox
+from undata.unsample import UNSample
 
 if TYPE_CHECKING:
-    from undata.undataset import UNSample
+    from undata.undataset import UNDataset
 
 
-class YOLOReader(UNDatasetReader):
+class YOLOReader:
+    @classmethod
+    def read_sample(cls, yolo_lines: List[str]) -> "UNSample":
 
-    def read_sample(
-        self,
-         yolo_lines: List[str]
-    ) -> "UNSample":
-        
         bboxes = []
         for l in yolo_lines:
             try:
@@ -27,16 +24,17 @@ class YOLOReader(UNDatasetReader):
                 )
             except:
                 print("Error in parsing line:", l)
-        
+
         return UNSample(bbox=bboxes)
 
+    @classmethod
     def read(
-        self,
+        cls,
         classes_path: str,
         annotations_dir: str,
         images_dir: str,
         images_lead: bool = True,
-    ):
+    ) -> "UNDataset":
         if not os.path.exists(annotations_dir):
             raise ValueError(f"Annotation path: {annotations_dir} does not exists")
 
@@ -120,7 +118,7 @@ class YOLOReader(UNDatasetReader):
                 with open(annotation_global_path, "r") as fp:
                     yolo_lines = fp.readlines()
 
-                sample = self.read_sample(yolo_lines)
+                sample = cls.read_sample(yolo_lines)
                 sample.compute_image_wh(undataset.rootdir)
 
                 undataset.append(sample)

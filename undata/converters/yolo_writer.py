@@ -1,20 +1,20 @@
-from typing import TYPE_CHECKING
 import os
+from typing import TYPE_CHECKING
+
 from tqdm import tqdm
 
-from undata.converters.base import UNDatasetWriter
-
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset, UNSample
+    from undata.undataset import UNDataset
+    from undata.unsample import UNSample
 
 
-class YOLOWriter(UNDatasetWriter):
+class YOLOWriter:
 
     def write_sample(self, sample: "UNSample") -> str:
         sample = sample.bbox_convert(to_format="yolo", inplace=False)
 
         if not sample.bbox:
-            return "null"  # Return an empty string if no bounding boxes exist
+            return ""  # Return an empty string if no bounding boxes exist
 
         yolo_string_list = []
         if sample.bbox:
@@ -24,7 +24,6 @@ class YOLOWriter(UNDatasetWriter):
 
         return "\n".join(yolo_string_list)
 
-
     def write(self, dataset: "UNDataset", ann_path: str, exist_ok: bool = True) -> None:
         if os.path.exists(ann_path):
             if not exist_ok:
@@ -32,9 +31,7 @@ class YOLOWriter(UNDatasetWriter):
         else:
             os.makedirs(ann_path, exist_ok=exist_ok)
 
-        for idx in tqdm(
-            dataset.sample.keys(), desc=f"Exporting to yolo annotations"
-        ):
+        for idx in tqdm(dataset.sample.keys(), desc=f"Exporting to yolo annotations"):
             yolo_str = self.write_sample(dataset.sample[idx])
             # Get name of the image
             image_name = os.path.basename(dataset.sample[idx].image_path)

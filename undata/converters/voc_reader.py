@@ -4,18 +4,18 @@ from typing import TYPE_CHECKING, Dict, List, Tuple
 
 from tqdm import tqdm
 
-from undata import UNBBox
-from undata.converters.base import UNDatasetReader
+from undata.unbbox import UNBBox
 from undata.unsample import UNSample
 
 if TYPE_CHECKING:
-    from undata.unsample import UNSample
+    from undata.undataset import UNDataset
 
 
-class VOCReader(UNDatasetReader):
+class VOCReader:
 
+    @classmethod
     def read_sample(
-        self,
+        cls,
         annotation_path: str,
         image_path: str,
         labels_to_id: Dict[str, int],
@@ -25,7 +25,9 @@ class VOCReader(UNDatasetReader):
         try:
             root = ET.parse(annotation_path).getroot()
         except Exception as exc:
-            raise ValueError(f"Failed to parse VOC xml: {annotation_path}: {exc}") from exc
+            raise ValueError(
+                f"Failed to parse VOC xml: {annotation_path}: {exc}"
+            ) from exc
 
         bboxes = []
         for obj in root.findall("object"):
@@ -54,7 +56,7 @@ class VOCReader(UNDatasetReader):
             )
         return UNSample(image_path=image_path, bbox=bboxes or None)
 
-    @staticmethod
+    @classmethod
     def _list_files_by_stem(root: str) -> Dict[str, str]:
         files = {}
         for filename in os.listdir(root):
@@ -65,16 +67,17 @@ class VOCReader(UNDatasetReader):
             files[stem] = filename
         return files
 
-    @staticmethod
+    @classmethod
     def _sample_order(items: Dict[str, str]) -> List[Tuple[str, str]]:
         return sorted(items.items(), key=lambda x: x[0])
 
+    @classmethod
     def read(
-        self,
+        cls,
         annotations_dir: str,
         images_dir: str,
         images_lead: bool = True,
-    ):
+    ) -> "UNDataset":
         from undata.undataset import UNDataset
 
         if not os.path.exists(annotations_dir):
@@ -83,21 +86,24 @@ class VOCReader(UNDatasetReader):
         if not os.path.exists(images_dir):
             raise ValueError(f"Images path: {images_dir} does not exists")
 
-
         labels_to_id: Dict[str, int] = {}
         undataset = UNDataset(rootdir=images_dir)
 
-        image_names = self._list_files_by_stem(images_dir)
-        annotation_names = self._list_files_by_stem(annotations_dir)
+        image_names = cls._list_files_by_stem(images_dir)
+        annotation_names = cls._list_files_by_stem(annotations_dir)
 
         if images_lead:
-            iterator = self._sample_order(image_names)
-            for img_name, img_filename in tqdm(iterator, desc="Loading from voc images"):
+            iterator = cls._sample_order(image_names)
+            for img_name, img_filename in tqdm(
+                iterator, desc="Loading from voc images"
+            ):
                 sample = UNSample(image_path=img_filename)
-                annotation_global_path = os.path.join(annotations_dir, img_name + ".xml")
+                annotation_global_path = os.path.join(
+                    annotations_dir, img_name + ".xml"
+                )
 
                 if os.path.exists(annotation_global_path):
-                    parsed_sample = self.read_sample(
+                    parsed_sample = cls.read_sample(
                         annotation_path=annotation_global_path,
                         image_path=img_filename,
                         labels_to_id=labels_to_id,
@@ -108,7 +114,7 @@ class VOCReader(UNDatasetReader):
                 sample.compute_image_wh(undataset.rootdir)
                 undataset.append(sample)
         else:
-            iterator = self._sample_order(annotation_names)
+            iterator = cls._sample_order(annotation_names)
             for ann_name, ann_filename in tqdm(
                 iterator, desc="Loading from voc annotations"
             ):
@@ -119,7 +125,7 @@ class VOCReader(UNDatasetReader):
 
                 sample = UNSample(image_path=image_names[ann_name])
                 annotation_global_path = os.path.join(annotations_dir, ann_filename)
-                parsed_sample = self.read_sample(
+                parsed_sample = cls.read_sample(
                     annotation_path=annotation_global_path,
                     image_path=image_names[ann_name],
                     labels_to_id=labels_to_id,

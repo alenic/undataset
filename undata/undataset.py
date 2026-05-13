@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from undata.unsample import UNSample
 from undata.untypes import BBoxFormatType
-from undata.converters import YOLOConverter, VOCConverter
+from undata.converters import YOLOReader, YOLOWriter, VOCReader, VOCWriter
 
 
 class UNDataset(BaseModel):
@@ -93,14 +93,14 @@ class UNDataset(BaseModel):
         del self.sample[idx]
         return self
 
-    def get_sample(self, idx: int, inplace: bool = True) -> UNSample:
+    def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
             raise IndexError(f"Index {idx} does not exists")
 
         sample = self.sample[idx]
         return sample.model_copy(deep=True) if not inplace else sample
 
-    def items(self, inplace: bool = True):
+    def items(self, inplace: bool = False):
         for idx in self.sample.keys():
             yield idx, self.get_sample(idx, inplace=inplace)
 
@@ -440,7 +440,7 @@ class UNDataset(BaseModel):
         images_lead: bool = True,
     ) -> "UNDataset":
 
-        undataset = YOLOConverter.read(
+        undataset = YOLOReader.read(
             classes_path,
             annotations_dir,
             images_dir,
@@ -449,7 +449,7 @@ class UNDataset(BaseModel):
         return undataset
 
     def to_yolo(self, ann_path: str, exist_ok: bool = True):
-        return YOLOConverter.write(
+        return YOLOWriter().write(
             self,
             ann_path,
             exist_ok,
@@ -464,7 +464,7 @@ class UNDataset(BaseModel):
         images_lead: bool = True,
     ) -> "UNDataset":
 
-        undataset = VOCConverter.read(
+        undataset = VOCReader.read(
             annotations_dir,
             images_dir,
             images_lead,
@@ -472,4 +472,4 @@ class UNDataset(BaseModel):
         return undataset
 
     def to_voc(self, ann_path: str, exist_ok: bool = True):
-        VOCConverter.write(self, ann_path, exist_ok)
+        VOCWriter().write(self, ann_path, exist_ok)

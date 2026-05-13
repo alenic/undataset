@@ -4,16 +4,16 @@ from typing import TYPE_CHECKING, Dict, Optional
 
 from tqdm import tqdm
 
-from undata.converters.base import UNDatasetWriter
-
 if TYPE_CHECKING:
     from undata.undataset import UNDataset
     from undata.unsample import UNSample
 
 
-class VOCWriter(UNDatasetWriter):
+class VOCWriter:
     @staticmethod
-    def _label_name(label_id: Optional[int], labels_map: Optional[Dict[int, str]]) -> str:
+    def _label_name(
+        label_id: Optional[int], labels_map: Optional[Dict[int, str]]
+    ) -> str:
         if label_id is None:
             raise ValueError("VOC export requires bbox label_id to be set")
 
