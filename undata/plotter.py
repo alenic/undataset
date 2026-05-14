@@ -18,10 +18,10 @@ class Plotter:
         return (int(255 * rgb[0]), int(255 * rgb[1]), int(255 * rgb[2]))
 
     def crop_sample(
-        self, root_dir: str, sample: UNSample, padding_perc: float = 0
+        self, rootdir: str, sample: UNSample, padding_perc: float = 0
     ) -> List[Image.Image]:
 
-        image_path = os.path.join(root_dir, sample.image_path)
+        image_path = os.path.join(rootdir, sample.image_path)
         try:
             image = Image.open(image_path).convert("RGB")
         except Exception as e:
@@ -51,7 +51,7 @@ class Plotter:
 
     def draw_sample(
         self,
-        root_dir: str,
+        rootdir: str,
         sample: UNSample,
         labels_map: Optional[Dict[int, str]],
         show_text: bool = True,
@@ -59,7 +59,7 @@ class Plotter:
         color: Optional[Tuple[int, int, int]] = None,
     ) -> Image.Image:
 
-        image_path = os.path.join(root_dir, sample.image_path)
+        image_path = os.path.join(rootdir, sample.image_path)
         try:
             image = Image.open(image_path).convert("RGB")
         except Exception as e:

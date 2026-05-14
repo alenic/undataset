@@ -34,17 +34,27 @@ import os
 """
 
 
-
 data_root = os.environ["DATASET_ROOT"]
 
-data_dir = os.path.join(data_root, "visdrone", "VisDrone2019-DET-val")
+data_dir = os.path.join(data_root, "visdrone", "VisDrone2019-DET-test-dev")
 images_dir = os.path.join(data_dir, "images")
 annotations_dir = os.path.join(data_dir, "annotations")
 
 
 dataset = ud.UNDataset(
     rootdir=images_dir,
-    labels_map=["pedestrian", "people","bicycle", "car", "van", "truck", "tricycle","awning-tricycle","bus", "motor"]  # 1 to 10
+    labels_map=[
+        "pedestrian",
+        "people",
+        "bicycle",
+        "car",
+        "van",
+        "truck",
+        "tricycle",
+        "awning-tricycle",
+        "bus",
+        "motor",
+    ],  # 1 to 10
 )
 
 image_files = os.listdir(images_dir)
@@ -55,7 +65,7 @@ for img_file in image_files:
     if not os.path.isfile(image_path):
         print("Skipping", image_path)
         continue
-    
+
     name, ext = os.path.splitext(image_path)
     ann_path = os.path.join(annotations_dir, img_file.replace(ext, ".txt"))
 
@@ -65,27 +75,20 @@ for img_file in image_files:
     fail = False
     for line in lines:
         try:
-            x,y,w,h, score, cat, trunc, occ = map(int, line.split(","))
-            cat = cat-1 # mat from 0 to C-1
+            x, y, w, h, score, cat, trunc, occ = map(int, line.split(","))
+            cat = cat - 1  # mat from 0 to C-1
 
             if score == 1 and cat <= 9:
-                bb = ud.UNBBox(
-                    coords=[x,y,w,h],
-                    format="xywh",
-                    label_id=cat
-                )
+                bb = ud.UNBBox(coords=[x, y, w, h], format="xywh", label_id=cat)
                 bbox_list.append(bb)
 
         except:
             print("Error in bbox", ann_path)
             fail = True
             break
-    
+
     if not fail:
-        sample = ud.UNSample(
-            image_path=img_file,
-            bbox=bbox_list
-        )
+        sample = ud.UNSample(image_path=img_file, bbox=bbox_list)
 
         dataset.append(sample)
 
@@ -94,9 +97,12 @@ df = dataset.to_dataframe()
 print(df)
 
 # df = dataset.as_dataframe()
-# 
+#
 
 
-yolo_anns_dir = os.path.join(data_dir, "anns")
-dataset.to_yolo(ann_path=yolo_anns_dir, exist_ok=True)
+# Export to yolo
+# yolo_anns_dir = os.path.join(data_dir, "anns")
+# dataset.to_yolo(ann_path=yolo_anns_dir, exist_ok=True)
 
+# Export to undataset
+dataset.to_json(os.path.join(data_dir, "VisDrone2019-DET-val-undataset.json"))

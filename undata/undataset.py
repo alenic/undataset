@@ -1,7 +1,7 @@
 import copy
 import os
 import hashlib
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Tuple
 
 from collections import defaultdict
 
@@ -12,6 +12,8 @@ from tqdm import tqdm
 from undata.unsample import UNSample
 from undata.untypes import BBoxFormatType
 from undata.converters import YOLOReader, YOLOWriter, VOCReader, VOCWriter
+
+from PIL import Image
 
 
 class UNDataset(BaseModel):
@@ -384,6 +386,35 @@ class UNDataset(BaseModel):
                 # If no bbox, skip sample
                 continue
         return filtered
+
+    # =================== Plot =======================================
+    def draw_sample(
+        self,
+        index: int,
+        show_text: bool = True,
+        font_size: int = 20,
+        color: Optional[Tuple[int, int, int]] = None,
+        cmap: str = "tab10",
+    ) -> Image.Image:
+        from undata.plotter import Plotter
+
+        return Plotter(cmap).draw_sample(
+            self.rootdir,
+            sample=self.sample[index],
+            labels_map=self.labels_map,
+            show_text=show_text,
+            font_size=font_size,
+            color=color,
+        )
+
+    def crop_sample(self, index: int, padding_perc: float = 0.0) -> List[Image.Image]:
+        from undata.plotter import Plotter
+
+        assert padding_perc >= 0.0
+
+        return Plotter().crop_sample(
+            rootdir=self.rootdir, sample=self.sample[index], padding_perc=padding_perc
+        )
 
     # =================== Conversion Methods =========================
 
