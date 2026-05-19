@@ -76,13 +76,13 @@ def test_getitem_and_len_work_and_missing_raises():
         _ = ds[1]
 
 
-def test_constructor_normalizes_maps_and_get_image_paths_uses_rootdir():
+def test_constructor_normalizes_maps_and_image_paths_uses_rootdir():
     ds = UNDataset(rootdir="/data", labels_map=["cat", "dog"], tags_map={"0": "day"})
     ds.append(_sample("img1.jpg"))
 
     assert ds.labels_map == {0: "cat", 1: "dog"}
     assert ds.tags_map == {0: "day"}
-    assert ds.get_image_paths() == ["/data/img1.jpg"]
+    assert ds.image_paths() == ["/data/img1.jpg"]
 
 
 def test_set_tags_map_with_list_and_set_rootdir():
@@ -112,6 +112,7 @@ def test_append_recomputes_next_id_when_initialized_with_sparse_ids():
     assert 9 in ds.sample
     assert ds.sample[9].image_path == "c.jpg"
 
+
 def test_append_rejects_non_unsample_values():
     ds = UNDataset()
 
@@ -129,3 +130,301 @@ def test_items_inplace_true_returns_live_samples():
 
     assert ds.sample[0].image_path == "changed.jpg"
     assert ds.sample[0].bbox[0].label_id == 99
+
+
+def test_unsample_remove_labels_returns_copy_by_default():
+    sample = UNSample(
+        image_path="a.jpg",
+        bbox=[
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=None),
+        ],
+    )
+
+    filtered = sample.remove_labels([2])
+
+    assert [bb.label_id for bb in filtered.bbox] == [1, None]
+    assert [bb.label_id for bb in sample.bbox] == [1, 2, None]
+
+
+def test_unsample_remove_labels_inplace_removes_matching_boxes():
+    sample = UNSample(
+        image_path="a.jpg",
+        bbox=[
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=3),
+        ],
+    )
+
+    sample.remove_labels([1, 3], inplace=True)
+
+    assert [bb.label_id for bb in sample.bbox] == [2]
+
+
+def test_undataset_remove_labels_returns_copy_by_default():
+    ds = UNDataset(labels_map={1: "cat", 2: "dog"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            ],
+        )
+    )
+
+    filtered = ds.remove_labels([2], keep_labels_map=True)
+
+    print(filtered)
+
+    assert [bb.label_id for bb in filtered.sample[0].bbox] == [1]
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [1, 2]
+
+
+def test_undataset_remove_labels_inplace_updates_all_samples():
+    ds = UNDataset()
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            ],
+        )
+    )
+    ds.append(
+        UNSample(
+            image_path="b.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=3),
+            ],
+        )
+    )
+
+    ds.remove_labels([2], keep_labels_map=True, inplace=True)
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [1]
+    assert [bb.label_id for bb in ds.sample[1].bbox] == [3]
+
+
+def test_check_labels_reports_coherent_mapping():
+    ds = UNDataset(labels_map={1: "cat", 2: "dog"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            ],
+        )
+    )
+
+    result = ds.check_labels()
+
+    assert result == {
+        "is_coherent": True,
+        "used_label_ids": [1, 2],
+        "unmapped_label_ids": [],
+        "unused_label_map_ids": [],
+    }
+
+
+def test_check_labels_reports_unmapped_and_unused_ids():
+    ds = UNDataset(labels_map={1: "cat", 3: "bird"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=None),
+            ],
+        )
+    )
+
+    result = ds.check_labels()
+
+    assert result == {
+        "is_coherent": False,
+        "used_label_ids": [1, 2],
+        "unmapped_label_ids": [2],
+        "unused_label_map_ids": [3],
+    }
+
+
+def test_merge_labels_returns_copy_by_default_and_reassigns_remaining_ids():
+    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=40),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=None),
+            ],
+        )
+    )
+
+    merged = ds.merge_labels({0: [20, 40]}, {0: "pet"})
+
+    assert merged.labels_map == {0: "pet", 1: "cat", 2: "bird"}
+    assert [bb.label_id for bb in merged.sample[0].bbox] == [0, 0, 2, None]
+
+    assert ds.labels_map == {10: "cat", 20: "dog", 30: "bird", 40: "horse"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [20, 40, 30, None]
+
+
+def test_merge_labels_inplace_updates_current_dataset():
+    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=40),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+            ],
+        )
+    )
+
+    ds.merge_labels({0: [20, 40]}, {0: "pet"}, inplace=True)
+
+    assert ds.labels_map == {0: "pet", 1: "cat", 2: "bird"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [0, 0, 2]
+
+
+def test_merge_labels_rejects_overlapping_groups():
+    ds = UNDataset(labels_map={0: "cat", 1: "dog", 2: "bird"})
+
+    with pytest.raises(ValueError, match="appears in more than one merge group"):
+        ds.merge_labels({0: [0, 1], 1: [1, 2]}, {0: "pet", 1: "other"})
+
+
+def test_remap_labels_allows_new_target_ids_and_drops_labels():
+    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=None),
+            ],
+        )
+    )
+
+    ds.remap_labels({10: 0, 20: 0, 30: None}, {0: "pet"})
+
+    assert ds.labels_map == {0: "pet"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [0, 0, None]
+
+
+def test_remap_labels_requires_new_map_to_cover_preserved_ids():
+    ds = UNDataset(labels_map={5: "cat", 7: "dog"})
+
+    with pytest.raises(
+        ValueError,
+        match="new_labels_map keys must exactly match the resulting label ids",
+    ):
+        ds.remap_labels({5: 0}, {0: "pet"})
+
+
+def test_normalize_labels_map_returns_copy_by_default():
+    ds = UNDataset(labels_map={10: "cat", 30: "bird", 99: "unused"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=None),
+            ],
+        )
+    )
+
+    normalized = ds.normalize_labels_map()
+
+    assert normalized.labels_map == {0: "cat", 1: "bird"}
+    assert [bb.label_id for bb in normalized.sample[0].bbox] == [1, 0, None]
+
+    assert ds.labels_map == {10: "cat", 30: "bird", 99: "unused"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [30, 10, None]
+
+
+def test_normalize_labels_map_inplace_fills_unmapped_and_drops_unused_ids():
+    ds = UNDataset(labels_map={4: "dog", 9: "unused"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=7),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=4),
+            ],
+        )
+    )
+
+    ds.normalize_labels_map(inplace=True)
+
+    assert ds.labels_map == {0: "dog", 1: "7"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [1, 0]
+
+
+def test_normalize_labels_map_without_existing_labels_map_builds_one():
+    ds = UNDataset()
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=5),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
+            ],
+        )
+    )
+
+    ds.normalize_labels_map(inplace=True)
+
+    assert ds.labels_map == {0: "2", 1: "5"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [1, 0]
+
+
+def test_normalize_labels_map_ascending_order_uses_label_names():
+    ds = UNDataset(labels_map={10: "zebra", 30: "ant", 20: "dog"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+            ],
+        )
+    )
+
+    ds.normalize_labels_map(ascending_order=True, inplace=True)
+
+    assert ds.labels_map == {0: "ant", 1: "dog", 2: "zebra"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [2, 1, 0]
+
+
+def test_normalize_labels_map_ascending_order_appends_unmapped_used_ids():
+    ds = UNDataset(labels_map={10: "zebra", 30: "ant"})
+    ds.append(
+        UNSample(
+            image_path="a.jpg",
+            bbox=[
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
+                UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=5),
+            ],
+        )
+    )
+
+    ds.normalize_labels_map(ascending_order=True, inplace=True)
+
+    assert ds.labels_map == {0: "ant", 1: "zebra", 2: "5", 3: "20"}
+    assert [bb.label_id for bb in ds.sample[0].bbox] == [3, 1, 0, 2]

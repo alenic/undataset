@@ -149,8 +149,8 @@ Other useful helpers:
 
 ```python
 dataset.compute_image_wh()
-dataset.get_image_paths()
-dataset.get_label_counts()
+dataset.image_paths()
+dataset.label_counts()
 dataset.get_stats()
 dataset.find_duplicate_images()
 

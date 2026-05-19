@@ -52,6 +52,36 @@ class UNSample(BaseModel):
                 sample.bbox = keep_bbox
             return sample
 
+    def remove_labels(self, label_ids: List[int], inplace=False):
+        """
+        Remove bounding boxes whose `label_id` is in `label_ids`.
+
+        Parameters
+        ----------
+        label_ids : List[int]
+            Label ids to remove from the sample.
+
+        inplace : bool, default=False
+            If `True`, modify the current sample. Otherwise, return a deep-copied
+            sample with the matching bounding boxes removed.
+
+        Returns
+        -------
+        UNSample
+            The updated sample instance.
+        """
+        remove_ids = set(label_ids)
+
+        if inplace:
+            if self.bbox is not None:
+                self.bbox = [bb for bb in self.bbox if bb.label_id not in remove_ids]
+            return self
+
+        sample = self.model_copy(deep=True)
+        if sample.bbox is not None:
+            sample.bbox = [bb for bb in sample.bbox if bb.label_id not in remove_ids]
+        return sample
+
     def compute_image_wh(self, rootdir: str):
         path = os.path.join(rootdir, self.image_path)
         if not os.path.exists(path):
@@ -65,7 +95,7 @@ class UNSample(BaseModel):
         except (UnidentifiedImageError, OSError) as e:
             raise ValueError(f"Failed to open image {path}: {e}") from e
 
-    def get_label_counts(self):
+    def label_counts(self):
         label_counts = defaultdict(int)
         if self.bbox:
             for bbox in self.bbox:
