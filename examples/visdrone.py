@@ -106,3 +106,4 @@ print(df)
 
 # Export to undataset
 dataset.to_json(os.path.join(data_dir, "VisDrone2019-DET-val-undataset.json"))
+dataset.read_json(os.path.join(data_dir, "VisDrone2019-DET-val-undataset.json"))

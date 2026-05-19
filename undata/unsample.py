@@ -3,7 +3,7 @@ from typing import List, Optional, Dict, Union
 
 import pandas as pd
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from collections import defaultdict
 
 from undata.untypes import BBoxFormatType
@@ -12,10 +12,18 @@ from undata.unbbox import UNBBox
 
 class UNSample(BaseModel):
     image_path: str  # Relative path
-    image_w: Optional[int] = None  # Image width
-    image_h: Optional[int] = None  # Image height
-    bbox: Optional[List[UNBBox]] = None  # BBox
-    tag_id: Optional[List[int]] = None  # Tags
+    image_w: Optional[int] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )  # Image width
+    image_h: Optional[int] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )  # Image height
+    bbox: Optional[List[UNBBox]] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )  # BBox
+    tag_id: Optional[List[int]] = Field(
+        default=None, exclude_if=lambda x: x is None
+    )  # Tags
 
     def add_bbox(
         self,
