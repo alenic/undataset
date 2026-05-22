@@ -1,17 +1,17 @@
 import pytest
 
-from undata import UNBBox, UNDataset, UNSample
+from undata import UNBBox, ODDataset, ODSample
 
 
-def _sample(image_path: str, label_id: int = 0) -> UNSample:
-    return UNSample(
+def _sample(image_path: str, label_id: int = 0) -> ODSample:
+    return ODSample(
         image_path=image_path,
         bbox=[UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=label_id)],
     )
 
 
 def test_append_assigns_incremental_ids_and_len():
-    ds = UNDataset()
+    ds = ODDataset()
 
     ds.append(_sample("b.jpg", 1)).append(_sample("a.jpg", 2))
 
@@ -20,7 +20,7 @@ def test_append_assigns_incremental_ids_and_len():
 
 
 def test_delete_removes_existing_and_missing_raises():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg"))
 
     ds.delete(0)
@@ -31,7 +31,7 @@ def test_delete_removes_existing_and_missing_raises():
 
 
 def test_get_sample_returns_copy_by_default():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg", 3))
 
     s = ds.get_sample(0)
@@ -43,7 +43,7 @@ def test_get_sample_returns_copy_by_default():
 
 
 def test_get_sample_inplace_true_returns_reference():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg", 3))
 
     s = ds.get_sample(0, inplace=True)
@@ -53,7 +53,7 @@ def test_get_sample_inplace_true_returns_reference():
 
 
 def test_items_and_iter_return_copies_by_default():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg", 1)).append(_sample("b.jpg", 2))
 
     first_idx, first = next(ds.items())
@@ -66,7 +66,7 @@ def test_items_and_iter_return_copies_by_default():
 
 
 def test_getitem_and_len_work_and_missing_raises():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg"))
 
     assert ds[0].image_path == "a.jpg"
@@ -77,7 +77,7 @@ def test_getitem_and_len_work_and_missing_raises():
 
 
 def test_constructor_normalizes_maps_and_image_paths_uses_rootdir():
-    ds = UNDataset(rootdir="/data", labels_map=["cat", "dog"], tags_map={"0": "day"})
+    ds = ODDataset(rootdir="/data", labels_map=["cat", "dog"], tags_map={"0": "day"})
     ds.append(_sample("img1.jpg"))
 
     assert ds.labels_map == {0: "cat", 1: "dog"}
@@ -86,7 +86,7 @@ def test_constructor_normalizes_maps_and_image_paths_uses_rootdir():
 
 
 def test_set_tags_map_with_list_and_set_rootdir():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.set_tags_map(["day", "night"])
     ds.set_rootdir("/tmp/images")
 
@@ -95,7 +95,7 @@ def test_set_tags_map_with_list_and_set_rootdir():
 
 
 def test_append_after_delete_keeps_monotonic_ids():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg")).append(_sample("b.jpg"))
 
     ds.delete(1)
@@ -105,7 +105,7 @@ def test_append_after_delete_keeps_monotonic_ids():
 
 
 def test_append_recomputes_next_id_when_initialized_with_sparse_ids():
-    ds = UNDataset(sample={5: _sample("a.jpg"), 8: _sample("b.jpg")})
+    ds = ODDataset(sample={5: _sample("a.jpg"), 8: _sample("b.jpg")})
 
     ds.append(_sample("c.jpg"))
 
@@ -114,14 +114,14 @@ def test_append_recomputes_next_id_when_initialized_with_sparse_ids():
 
 
 def test_append_rejects_non_unsample_values():
-    ds = UNDataset()
+    ds = ODDataset()
 
     with pytest.raises(TypeError):
         ds.append({"image_path": "a.jpg"})  # type: ignore[arg-type]
 
 
 def test_items_inplace_true_returns_live_samples():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(_sample("a.jpg", 1))
 
     _, s = next(ds.items(inplace=True))
@@ -133,7 +133,7 @@ def test_items_inplace_true_returns_live_samples():
 
 
 def test_unsample_remove_labels_returns_copy_by_default():
-    sample = UNSample(
+    sample = ODSample(
         image_path="a.jpg",
         bbox=[
             UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -149,7 +149,7 @@ def test_unsample_remove_labels_returns_copy_by_default():
 
 
 def test_unsample_remove_labels_inplace_removes_matching_boxes():
-    sample = UNSample(
+    sample = ODSample(
         image_path="a.jpg",
         bbox=[
             UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -164,9 +164,9 @@ def test_unsample_remove_labels_inplace_removes_matching_boxes():
 
 
 def test_undataset_remove_labels_returns_copy_by_default():
-    ds = UNDataset(labels_map={1: "cat", 2: "dog"})
+    ds = ODDataset(labels_map={1: "cat", 2: "dog"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -184,9 +184,9 @@ def test_undataset_remove_labels_returns_copy_by_default():
 
 
 def test_undataset_remove_labels_inplace_updates_all_samples():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -195,7 +195,7 @@ def test_undataset_remove_labels_inplace_updates_all_samples():
         )
     )
     ds.append(
-        UNSample(
+        ODSample(
             image_path="b.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=2),
@@ -210,9 +210,9 @@ def test_undataset_remove_labels_inplace_updates_all_samples():
 
 
 def test_check_labels_reports_coherent_mapping():
-    ds = UNDataset(labels_map={1: "cat", 2: "dog"})
+    ds = ODDataset(labels_map={1: "cat", 2: "dog"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -232,9 +232,9 @@ def test_check_labels_reports_coherent_mapping():
 
 
 def test_check_labels_reports_unmapped_and_unused_ids():
-    ds = UNDataset(labels_map={1: "cat", 3: "bird"})
+    ds = ODDataset(labels_map={1: "cat", 3: "bird"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=1),
@@ -255,9 +255,9 @@ def test_check_labels_reports_unmapped_and_unused_ids():
 
 
 def test_merge_labels_returns_copy_by_default_and_reassigns_remaining_ids():
-    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
+    ds = ODDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
@@ -278,9 +278,9 @@ def test_merge_labels_returns_copy_by_default_and_reassigns_remaining_ids():
 
 
 def test_merge_labels_inplace_updates_current_dataset():
-    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
+    ds = ODDataset(labels_map={10: "cat", 20: "dog", 30: "bird", 40: "horse"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),
@@ -297,16 +297,16 @@ def test_merge_labels_inplace_updates_current_dataset():
 
 
 def test_merge_labels_rejects_overlapping_groups():
-    ds = UNDataset(labels_map={0: "cat", 1: "dog", 2: "bird"})
+    ds = ODDataset(labels_map={0: "cat", 1: "dog", 2: "bird"})
 
     with pytest.raises(ValueError, match="appears in more than one merge group"):
         ds.merge_labels({0: [0, 1], 1: [1, 2]}, {0: "pet", 1: "other"})
 
 
 def test_remap_labels_allows_new_target_ids_and_drops_labels():
-    ds = UNDataset(labels_map={10: "cat", 20: "dog", 30: "bird"})
+    ds = ODDataset(labels_map={10: "cat", 20: "dog", 30: "bird"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
@@ -324,7 +324,7 @@ def test_remap_labels_allows_new_target_ids_and_drops_labels():
 
 
 def test_remap_labels_requires_new_map_to_cover_preserved_ids():
-    ds = UNDataset(labels_map={5: "cat", 7: "dog"})
+    ds = ODDataset(labels_map={5: "cat", 7: "dog"})
 
     with pytest.raises(
         ValueError,
@@ -334,9 +334,9 @@ def test_remap_labels_requires_new_map_to_cover_preserved_ids():
 
 
 def test_normalize_labels_map_returns_copy_by_default():
-    ds = UNDataset(labels_map={10: "cat", 30: "bird", 99: "unused"})
+    ds = ODDataset(labels_map={10: "cat", 30: "bird", 99: "unused"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=30),
@@ -356,9 +356,9 @@ def test_normalize_labels_map_returns_copy_by_default():
 
 
 def test_normalize_labels_map_inplace_fills_unmapped_and_drops_unused_ids():
-    ds = UNDataset(labels_map={4: "dog", 9: "unused"})
+    ds = ODDataset(labels_map={4: "dog", 9: "unused"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=7),
@@ -374,9 +374,9 @@ def test_normalize_labels_map_inplace_fills_unmapped_and_drops_unused_ids():
 
 
 def test_normalize_labels_map_without_existing_labels_map_builds_one():
-    ds = UNDataset()
+    ds = ODDataset()
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=5),
@@ -392,9 +392,9 @@ def test_normalize_labels_map_without_existing_labels_map_builds_one():
 
 
 def test_normalize_labels_map_ascending_order_uses_label_names():
-    ds = UNDataset(labels_map={10: "zebra", 30: "ant", 20: "dog"})
+    ds = ODDataset(labels_map={10: "zebra", 30: "ant", 20: "dog"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=10),
@@ -411,9 +411,9 @@ def test_normalize_labels_map_ascending_order_uses_label_names():
 
 
 def test_normalize_labels_map_ascending_order_appends_unmapped_used_ids():
-    ds = UNDataset(labels_map={10: "zebra", 30: "ant"})
+    ds = ODDataset(labels_map={10: "zebra", 30: "ant"})
     ds.append(
-        UNSample(
+        ODSample(
             image_path="a.jpg",
             bbox=[
                 UNBBox(coords=[0, 0, 10, 10], format="xywh", label_id=20),

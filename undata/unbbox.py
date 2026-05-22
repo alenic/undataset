@@ -1,7 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel
 from undata.untypes import BBoxFormatType
-from undata.bbox_converter import BBoxConverter
+from undata.helpers.bbox_converter import BBoxConverter
 
 Number = int | float
 

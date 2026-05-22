@@ -1,10 +1,11 @@
-from typing import Any, List, Union
+from typing import List, Union
 
 from typing_extensions import Tuple
 
-from undata import UNDataset
+
 from undata.unbbox import UNBBox
-from undata.unsample import UNSample
+from undata.datasets.od.oddataset import ODDataset
+from undata.datasets.od.odsample import ODSample
 
 
 class Evaluator:
@@ -57,8 +58,8 @@ class Evaluator:
 
     @staticmethod
     def iou_matrix(
-        gt_sample: UNSample,
-        predicted_sample: UNSample,
+        gt_sample: ODSample,
+        predicted_sample: ODSample,
         iou_threshold_for_match: float = 0.5,
         score_threshold: float = 0.5,
         check_label: bool = False,
@@ -68,8 +69,8 @@ class Evaluator:
         and filters them based on a threshold.
 
         Args:
-            gt_sample: Ground truth UNSample object.
-            predicted_sample: Predicted UNSample object.
+            gt_sample: Ground truth ODSample object.
+            predicted_sample: Predicted ODSample object.
             iou_threshold_for_match: IoU threshold for filtering.
             score_threshold: threshold on bounding box score for filtering.
             check_label: Check if label of predicted bounding box and ground truth bounding box match.
@@ -157,8 +158,8 @@ class Evaluator:
 
     @staticmethod
     def eval_samples(
-        gt_sample: UNSample,
-        pred_sample: UNSample,
+        gt_sample: ODSample,
+        pred_sample: ODSample,
         iou_threshold_for_match: float = 0.5,
         score_threshold: float = 0.5,
         check_label: bool = False,
@@ -212,8 +213,8 @@ class Evaluator:
 
     @staticmethod
     def evaluate_dataset(
-        dataset: UNDataset,
-        predicted_dataset: UNDataset,
+        dataset: ODDataset,
+        predicted_dataset: ODDataset,
         iou_threshold_for_match: float = 0.5,
         score_threshold: float = 0.5,
         check_label: bool = False,
@@ -269,7 +270,7 @@ if __name__ == "__main__":
     def simple_test():
         # Define GT sample with one bounding box
         gt_bbox = UNBBox(coords=[10, 10, 50, 50], format="xyxy", label_id=1)
-        gt_sample = UNSample(
+        gt_sample = ODSample(
             image_path="image1.jpg", image_w=100, image_h=100, bbox=[gt_bbox]
         )
 
@@ -277,18 +278,18 @@ if __name__ == "__main__":
         pred_bbox = UNBBox(
             coords=[10, 10, 50, 50], format="xyxy", label_id=1, score=0.9
         )
-        predicted_sample = UNSample(
+        predicted_sample = ODSample(
             image_path="image1.jpg", image_w=100, image_h=100, bbox=[pred_bbox]
         )
 
         # Create dataset and add the ground truth sample
-        dataset = UNDataset()
+        dataset = ODDataset()
         dataset.append(gt_sample)
 
         # Run evaluation
         results = Evaluator.evaluate_dataset(
             dataset,
-            predicted_dataset=UNDataset(sample={0: predicted_sample}),
+            predicted_dataset=ODDataset(sample={0: predicted_sample}),
             iou_threshold_for_match=0.5,
             score_threshold=0.5,
             check_label=True,
@@ -305,14 +306,14 @@ if __name__ == "__main__":
         pred_bbox_miss = UNBBox(
             coords=[60, 60, 80, 80], format="xyxy", label_id=1, score=0.9
         )
-        predicted_sample_miss = UNSample(
+        predicted_sample_miss = ODSample(
             image_path="image1.jpg", image_w=100, image_h=100, bbox=[pred_bbox_miss]
         )
 
         # Run evaluation again
         results_miss = Evaluator.evaluate_dataset(
             dataset,
-            predicted_dataset=UNDataset(sample={0: predicted_sample_miss}),
+            predicted_dataset=ODDataset(sample={0: predicted_sample_miss}),
             iou_threshold_for_match=0.5,
             score_threshold=0.5,
             check_label=True,

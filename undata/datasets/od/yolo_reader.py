@@ -1,18 +1,20 @@
+from __future__ import annotations
+
 import os
 import yaml
 from tqdm import tqdm
 from typing import TYPE_CHECKING, List
 
 from undata.unbbox import UNBBox
-from undata.unsample import UNSample
+from undata.datasets.od.odsample import ODSample
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
+    from undata.datasets.od.oddataset import ODDataset
 
 
 class YOLOReader:
     @classmethod
-    def read_sample(cls, yolo_lines: List[str]) -> "UNSample":
+    def read_sample(cls, yolo_lines: List[str]) -> "ODSample":
 
         bboxes = []
         for l in yolo_lines:
@@ -25,7 +27,7 @@ class YOLOReader:
             except:
                 print("Error in parsing line:", l)
 
-        return UNSample(bbox=bboxes)
+        return ODSample(bbox=bboxes)
 
     @classmethod
     def read(
@@ -33,8 +35,9 @@ class YOLOReader:
         classes_path: str,
         annotations_dir: str,
         images_dir: str,
+        dataset_cls: type[ODDataset],
         images_lead: bool = True,
-    ) -> "UNDataset":
+    ) -> ODDataset:
         if not os.path.exists(annotations_dir):
             raise ValueError(f"Annotation path: {annotations_dir} does not exists")
 
@@ -54,11 +57,8 @@ class YOLOReader:
         else:
             raise ValueError("Invalid classes_path, you must provide .txt or .yaml")
 
-        from undata.undataset import UNDataset
-        from undata.unsample import UNSample
-
         labels_map = {idx: name for idx, name in enumerate(classes["names"])}
-        undataset = UNDataset(rootdir=images_dir, labels_map=labels_map)
+        undataset = dataset_cls(rootdir=images_dir, labels_map=labels_map)
         # Get the filenames
         images_list = os.listdir(images_dir)
         anns_list = os.listdir(annotations_dir)
@@ -72,7 +72,7 @@ class YOLOReader:
             ):
 
                 # image_path is relative to rootdir
-                sample = UNSample(
+                sample = ODSample(
                     image_path=img_filename,
                 )
 
@@ -106,7 +106,7 @@ class YOLOReader:
                 if not os.path.exists(image_glob_path):
                     raise ValueError(f"Image path {image_glob_path} does not exists")
 
-                sample = UNSample(
+                sample = ODSample(
                     image_path=image_names[ann_name],
                 )
 

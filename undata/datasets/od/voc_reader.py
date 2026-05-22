@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Dict, List, Tuple
@@ -5,10 +7,10 @@ from typing import TYPE_CHECKING, Dict, List, Tuple
 from tqdm import tqdm
 
 from undata.unbbox import UNBBox
-from undata.unsample import UNSample
+from undata.datasets.od.odsample import ODSample
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
+    from undata.datasets.od.oddataset import ODDataset
 
 
 class VOCReader:
@@ -19,9 +21,7 @@ class VOCReader:
         annotation_path: str,
         image_path: str,
         labels_to_id: Dict[str, int],
-    ) -> "UNSample":
-        from undata.unsample import UNSample
-
+    ) -> "ODSample":
         try:
             root = ET.parse(annotation_path).getroot()
         except Exception as exc:
@@ -54,7 +54,7 @@ class VOCReader:
                     label_id=labels_to_id[class_name],
                 )
             )
-        return UNSample(image_path=image_path, bbox=bboxes or None)
+        return ODSample(image_path=image_path, bbox=bboxes or None)
 
     @classmethod
     def _list_files_by_stem(root: str) -> Dict[str, str]:
@@ -76,10 +76,9 @@ class VOCReader:
         cls,
         annotations_dir: str,
         images_dir: str,
+        dataset_cls: type[ODDataset],
         images_lead: bool = True,
-    ) -> "UNDataset":
-        from undata.undataset import UNDataset
-
+    ) -> ODDataset:
         if not os.path.exists(annotations_dir):
             raise ValueError(f"Annotation path: {annotations_dir} does not exists")
 
@@ -87,7 +86,7 @@ class VOCReader:
             raise ValueError(f"Images path: {images_dir} does not exists")
 
         labels_to_id: Dict[str, int] = {}
-        undataset = UNDataset(rootdir=images_dir)
+        undataset = dataset_cls(rootdir=images_dir)
 
         image_names = cls._list_files_by_stem(images_dir)
         annotation_names = cls._list_files_by_stem(annotations_dir)
@@ -97,7 +96,7 @@ class VOCReader:
             for img_name, img_filename in tqdm(
                 iterator, desc="Loading from voc images"
             ):
-                sample = UNSample(image_path=img_filename)
+                sample = ODSample(image_path=img_filename)
                 annotation_global_path = os.path.join(
                     annotations_dir, img_name + ".xml"
                 )
@@ -123,7 +122,7 @@ class VOCReader:
                         f"Image for annotation {ann_filename} does not exists in {images_dir}"
                     )
 
-                sample = UNSample(image_path=image_names[ann_name])
+                sample = ODSample(image_path=image_names[ann_name])
                 annotation_global_path = os.path.join(annotations_dir, ann_filename)
                 parsed_sample = cls.read_sample(
                     annotation_path=annotation_global_path,

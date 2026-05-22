@@ -2,10 +2,10 @@ from typing import Tuple, Dict, Optional, List
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 import os
-from undata import UNSample
+from undata.datasets.od.odsample import ODSample
 
 
-class Plotter:
+class ODPlotter:
     def __init__(self, cmap="tab10"):
         # Get colormap from matplotlib
         try:
@@ -18,7 +18,7 @@ class Plotter:
         return (int(255 * rgb[0]), int(255 * rgb[1]), int(255 * rgb[2]))
 
     def crop_sample(
-        self, rootdir: str, sample: UNSample, padding_perc: float = 0
+        self, rootdir: str, sample: ODSample, padding_perc: float = 0
     ) -> List[Image.Image]:
 
         image_path = os.path.join(rootdir, sample.image_path)
@@ -52,7 +52,7 @@ class Plotter:
     def draw_sample(
         self,
         rootdir: str,
-        sample: UNSample,
+        sample: ODSample,
         labels_map: Optional[Dict[int, str]],
         show_text: bool = True,
         font_size: int = 20,

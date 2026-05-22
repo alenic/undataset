@@ -41,7 +41,7 @@ images_dir = os.path.join(data_dir, "images")
 annotations_dir = os.path.join(data_dir, "annotations")
 
 
-dataset = ud.UNDataset(
+dataset = ud.ODDataset(
     rootdir=images_dir,
     labels_map=[
         "pedestrian",
@@ -88,7 +88,7 @@ for img_file in image_files:
             break
 
     if not fail:
-        sample = ud.UNSample(image_path=img_file, bbox=bbox_list)
+        sample = ud.ODSample(image_path=img_file, bbox=bbox_list)
 
         dataset.append(sample)
 

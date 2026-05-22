@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Dict, Optional
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
-    from undata.unsample import UNSample
+    from undata.datasets.od.oddataset import ODDataset
+    from undata.datasets.od.odsample import ODSample
 
 
 class VOCWriter:
@@ -35,7 +35,7 @@ class VOCWriter:
 
     def write_sample(
         self,
-        sample: "UNSample",
+        sample: "ODSample",
         labels_map: Optional[Dict[int, str]] = None,
         rootdir: Optional[str] = None,
     ) -> str:
@@ -87,7 +87,7 @@ class VOCWriter:
         self._indent_xml(annotation)
         return ET.tostring(annotation, encoding="unicode")
 
-    def write(self, dataset: "UNDataset", ann_path: str, exist_ok: bool = True) -> None:
+    def write(self, dataset: "ODDataset", ann_path: str, exist_ok: bool = True) -> None:
         if os.path.exists(ann_path):
             if not exist_ok:
                 raise FileExistsError(f"{ann_path} already exists")

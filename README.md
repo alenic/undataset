@@ -1,11 +1,11 @@
-# UNDataset
+# ODDataset
 
-UNDataset is a small Python toolkit for loading, inspecting, transforming, and exporting computer vision datasets.
+ODDataset is a small Python toolkit for loading, inspecting, transforming, and exporting computer vision datasets.
 
 The project currently focuses on image object detection datasets. Its internal model is intentionally simple:
 
-- `UNDataset`: a collection of image samples plus label/tag maps.
-- `UNSample`: one image and its annotations.
+- `ODDataset`: a collection of image samples plus label/tag maps.
+- `ODSample`: one image and its annotations.
 - `UNBBox`: one bounding box, with conversion between supported coordinate formats.
 
 ## Status
@@ -42,7 +42,7 @@ IOD is the current priority.
 
 | Format | Read | Write | Notes |
 | --- | --- | --- | --- |
-| UNDataset JSON | Yes | Yes | Native serialized representation |
+| ODDataset JSON | Yes | Yes | Native serialized representation |
 | Pandas DataFrame | Yes | Yes | Useful for analysis and tabular workflows |
 | YOLO | Yes | Yes | Uses class names from `.txt` or `.yaml` |
 | VOC XML | Yes | Yes | Pascal VOC-style XML annotations |
@@ -62,11 +62,11 @@ Conversions that need absolute/relative scaling require `image_w` and `image_h` 
 ## Quick Start
 
 ```python
-from undata import UNBBox, UNDataset, UNSample
+from undata import UNBBox, ODDataset, ODSample
 
-dataset = UNDataset(rootdir="images", labels_map=["person", "car"])
+dataset = ODDataset(rootdir="images", labels_map=["person", "car"])
 
-sample = UNSample(
+sample = ODSample(
     image_path="frame_001.jpg",
     image_w=1280,
     image_h=720,
@@ -86,9 +86,9 @@ print(converted.get_stats())
 ### YOLO
 
 ```python
-from undata import UNDataset
+from undata import ODDataset
 
-dataset = UNDataset.read_yolo(
+dataset = ODDataset.read_yolo(
     classes_path="dataset/classes.txt",
     annotations_dir="dataset/labels",
     images_dir="dataset/images",
@@ -102,9 +102,9 @@ dataset.to_yolo("out/labels")
 ### VOC
 
 ```python
-from undata import UNDataset
+from undata import ODDataset
 
-dataset = UNDataset.read_voc(
+dataset = ODDataset.read_voc(
     annotations_dir="dataset/Annotations",
     images_dir="dataset/JPEGImages",
 )
@@ -116,14 +116,14 @@ dataset.to_voc("out/Annotations")
 
 ```python
 dataset.to_json("dataset.json")
-dataset = UNDataset.read_json("dataset.json")
+dataset = ODDataset.read_json("dataset.json")
 ```
 
 ### DataFrame
 
 ```python
 df = dataset.to_dataframe()
-dataset = UNDataset.read_dataframe(df, rootdir="images")
+dataset = ODDataset.read_dataframe(df, rootdir="images")
 ```
 
 ## Common Operations
@@ -166,7 +166,7 @@ Converters are split into dedicated readers and writers:
 - `YOLOReader` / `YOLOWriter`
 - `VOCReader` / `VOCWriter`
 
-`UNDataset` exposes convenience methods like `read_yolo()` and `to_voc()`, but the converter modules avoid importing `UNDataset` at module import time. That keeps package imports simple and avoids circular import issues.
+`ODDataset` exposes convenience methods like `read_yolo()` and `to_voc()`, but the converter modules avoid importing `ODDataset` at module import time. That keeps package imports simple and avoids circular import issues.
 
 ## Development Tasks
 

@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING
 from tqdm import tqdm
 
 if TYPE_CHECKING:
-    from undata.undataset import UNDataset
-    from undata.unsample import UNSample
+    from undata.datasets.od.oddataset import ODDataset
+    from undata.datasets.od.odsample import ODSample
 
 
 class YOLOWriter:
 
-    def write_sample(self, sample: "UNSample") -> str:
+    def write_sample(self, sample: "ODSample") -> str:
         sample = sample.bbox_convert(to_format="yolo", inplace=False)
 
         if not sample.bbox:
@@ -24,7 +24,7 @@ class YOLOWriter:
 
         return "\n".join(yolo_string_list)
 
-    def write(self, dataset: "UNDataset", ann_path: str, exist_ok: bool = True) -> None:
+    def write(self, dataset: "ODDataset", ann_path: str, exist_ok: bool = True) -> None:
         if os.path.exists(ann_path):
             if not exist_ok:
                 raise FileExistsError(f"{ann_path} already exists")
