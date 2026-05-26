@@ -85,6 +85,27 @@ class UNDataset(BaseModel):
         del self.sample[idx]
         return self
 
+    def set_tags_map(self, tags_map: Union[Dict[int, str], List[str]]):
+        self.tags_map = self._normalize_map(copy.deepcopy(tags_map))
+
+    def reset_index(self) -> "UNDataset":
+        sorted_index = sorted(self.sample.keys())
+        self.sample = {i: v for i, v in enumerate(sorted_index)}
+        self._refresh_next_sample_id()
+        return self
+
+    def check_tags(self):
+        """
+        Check if tags ids match the tags_map
+        """
+        tag_ids = set(self.tags_map.keys())
+        for s_id, s_val in self.sample.items():
+            if s_val.tags is not None:
+                if not all([tag in tag_ids for tag in s_val.tags]):
+                    raise ValueError(
+                        f"example id {s_id} doesn't match the tags_map: {s_val.tags}"
+                    )
+
     def get_sample(self, idx: int, inplace: bool = False) -> UNSample:
         if idx not in self.sample:
             raise IndexError(f"Index {idx} does not exists")
@@ -105,12 +126,3 @@ class UNDataset(BaseModel):
 
     def __len__(self) -> int:
         return len(self.sample)
-
-    def set_tags_map(self, tags_map: Union[Dict[int, str], List[str]]):
-        self.tags_map = self._normalize_map(copy.deepcopy(tags_map))
-
-    def reset_index(self) -> "UNDataset":
-        sorted_index = sorted(self.sample.keys())
-        self.sample = {i: v for i, v in enumerate(sorted_index)}
-        self._refresh_next_sample_id()
-        return self
